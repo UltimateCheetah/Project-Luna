@@ -725,7 +725,10 @@ const keyCardInput   = document.getElementById('key-card-input');
   if(keyCardH2) keyCardH2.textContent = "hii, I'm Luna!";
 })();
 
-function openSettings(){ settingsVeil.classList.add('open'); }
+function openSettings(){
+  buildPersonaGrid();
+  settingsVeil.classList.add('open');
+}
 function closeSettings(){ settingsVeil.classList.remove('open'); }
 function openAbout(){ aboutVeil.classList.add('open'); }
 function closeAbout(){ aboutVeil.classList.remove('open'); }
