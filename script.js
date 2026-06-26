@@ -6,7 +6,7 @@ import { VRMLoaderPlugin, VRMUtils } from 'https://cdn.jsdelivr.net/npm/@pixiv/t
 // ─── DEFAULT API KEYS ────────────────────────────────────────────────────────
 const DEFAULT_OPENROUTER_KEY  = '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';
 const DEFAULT_ELEVENLABS_KEY  = 'sk_739ceaf6f325561e41cd23d777f8bbe1e8038dc8c0abe9c9';
-const ELEVENLABS_VOICE_ID     = 'EXAVITQu4vr4xnSDxMaL';
+const ELEVENLABS_VOICE_ID     = '3TvwAYaI9aPzmchBRZA0';
 const DEFAULT_MODEL_ID        = 'openrouter/free';
 // ─────────────────────────────────────────────────────────────────────────────
 
