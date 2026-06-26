@@ -18,31 +18,15 @@ const MAX_STORED_MESSAGES = 200;
 
 // ─── KEYWORD → ANIMATION MAP ─────────────────────────────────────────────────
 const KEYWORD_ANIM_MAP = [
-  { words: ['yay','woohoo','yes!','amazing','awesome','let\'s go','excited','woo','nice!'],   clipPattern: /dance|jump|cheer|excited/i },
-  { words: ['bye','goodbye','see you','take care','later','cya','farewell'],               clipPattern: /wave|bye|farewell/i },
-  { words: ['hello','hi','hey','welcome','nice to meet','howdy'],                       clipPattern: /wave|greet|hello/i },
-  { words: ['no','nope','never','absolutely not','i refuse','nuh uh'],                   clipPattern: /shake|no|deny|head/i },
-  { words: ['thinking','hmm','let me think','interesting','wondering','wait','hm'],         clipPattern: /think|ponder|idle/i },
-  { words: ['angry','ugh','seriously','come on','really?','mad','upset'],                     clipPattern: /angry|mad|frustrated/i },
-  { words: ['happy','love','adore','so glad','happy for','adore','joy'],                      clipPattern: /happy|joy|love/i },
-  { words: ['tail','wag','wiggle','swish','flirty','cute','adorable','uwu','nyah'],    clipPattern: /tail|wag|wiggle|dance|happy/i },
-  { words: ['stretch','yawn','tired','sleepy','rest'],                                  clipPattern: /stretch|yawn|tired/i },
-  { words: ['laugh','haha','lol','funny','hilarious','hehe'],                           clipPattern: /laugh|joy|happy/i },
-  { words: ['kiss','love you','adore you','swoon'],                                     clipPattern: /dance|love|happy/i },
+  { words: ['yay','woohoo','yes!','amazing','awesome','let\'s go','excited'],   clipPattern: /dance|jump|cheer|excited/i },
+  { words: ['bye','goodbye','see you','take care','later','cya'],               clipPattern: /wave|bye|farewell/i },
+  { words: ['hello','hi','hey','welcome','nice to meet'],                       clipPattern: /wave|greet|hello/i },
+  { words: ['no','nope','never','absolutely not','i refuse'],                   clipPattern: /shake|no|deny/i },
+  { words: ['thinking','hmm','let me think','interesting','wondering'],         clipPattern: /think|ponder|idle/i },
+  { words: ['angry','ugh','seriously','come on','really?'],                     clipPattern: /angry|mad|frustrated/i },
+  { words: ['happy','love','adore','so glad','happy for'],                      clipPattern: /happy|joy|love/i },
+  { words: ['tail','wag','wiggle','swish','flirty','cute','adorable','uwu'],    clipPattern: /tail|wag|wiggle|dance|happy/i },
 ];
-
-// ─── MOOD → ANIMATION MAP ─────────────────────────────────────────────────
-const MOOD_ANIM_MAP = {
-  'listening':   { pattern: /listen|idle|stand/i, loop: true },
-  'thinking':    { pattern: /think|ponder|idle/i, loop: true },
-  'speaking':    { pattern: /talk|speak|idle/i, loop: true },
-  'curious':     { pattern: /idle|stand|casual/i, loop: true },
-  'excited':     { pattern: /dance|jump|cheer|happy/i, loop: false },
-  'happy':       { pattern: /happy|joy|dance/i, loop: false },
-  'confused':    { pattern: /think|ponder|idle/i, loop: true },
-  'playful':     { pattern: /dance|wiggle|wag/i, loop: false },
-  'dormant':     { pattern: /idle|stand|casual/i, loop: true },
-};
 
 // ─── PERSONAS ─────────────────────────────────────────────────────────────────
 const PERSONAS = [
@@ -426,23 +410,16 @@ function detectAndPlayKeywordAnim(replyText){
 }
 
 // ─── MOOD / REACTION SYSTEM ──────────────────────────────────────────────────
-function setMood(word){
-  moodWord.textContent = word;
-  playMoodAnimation(word);
-}
-
-function playMoodAnimation(mood){
-  if(!MOOD_ANIM_MAP[mood]) return;
-  const anim = MOOD_ANIM_MAP[mood];
-  tryPlayByPattern(anim.pattern, anim.loop);
-}
+function setMood(word){ moodWord.textContent = word; }
 
 function reactToUserMessage(){
   setMood('listening');
+  tryPlayByPattern(/wave|greet|hello/i, false);
 }
 
 function reactWhileThinking(){
   setMood('thinking');
+  tryPlayByPattern(/think|ponder/i, true);
 }
 
 function reactToReply(replyText){
@@ -458,30 +435,34 @@ function reactToReply(replyText){
   }, 3000);
 }
 
-// ─── KEYWORD ANIMATION DETECTION ─────────────────────────────────────────────
-function detectAndPlayKeywordAnim(replyText){
-  const lower = replyText.toLowerCase();
-  
-  // Check for keyword matches
-  for(const entry of KEYWORD_ANIM_MAP){
-    if(entry.words.some(w => lower.includes(w))){
-      const clip = _cachedClips.find(c => entry.clipPattern.test(c.name));
-      if(clip){
-        playClip(clip.name, false);
-        return;
-      }
-    }
-  }
-  
-  // If no keyword match, try a general animation based on sentiment
-  if(/[!]{2,}|wow|amazing|incredible|beautiful|wonderful/.test(lower)){
-    tryPlayByPattern(/dance|jump|cheer|happy/i, false);
-  } else if(/\?{2,}|confused|what|huh|wait/.test(lower)){
-    tryPlayByPattern(/think|ponder/i, false);
-  } else if(/[.]{3,}|hmm|so|like|well/.test(lower)){
-    tryPlayByPattern(/idle|stand/i, true);
-  }
+// ─── TEXT-TO-SPEECH (ElevenLabs) ─────────────────────────────────────────────
+let currentAudio = null;
+
+async function speakText(text){
+  const key = state.elevenLabsKey;
+  if(!key || !text) return;
+  if(currentAudio){ currentAudio.pause(); currentAudio = null; }
+  const clean = text.replace(/[*_`#>]/g, '').replace(/\n+/g, ' ').trim();
+  try{
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: clean,
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.45, similarity_boost: 0.82, style: 0.25, use_speaker_boost: true }
+      })
+    });
+    if(!res.ok){ console.warn('ElevenLabs TTS error', res.status); return; }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.play();
+    currentAudio.addEventListener('ended', () => { URL.revokeObjectURL(url); currentAudio = null; });
+  } catch(e){ console.warn('TTS fetch failed', e); }
 }
+
+// ─── CHAT ────────────────────────────────────────────────────────────────────
 const latestLine     = document.getElementById('latest-line');
 const fullChatScroll = document.getElementById('full-chat-scroll');
 const msgInput       = document.getElementById('msg-input');
