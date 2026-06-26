@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Luna</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">✦</span>
+          <div>
+            <h1>Project Luna</h1>
+            <p>Dark, pink-tinted companion experience</p>
+          </div>
+        </div>
+        <div class="status-pill">Live • OpenRouter ready</div>
+      </header>
+
+      <main class="layout">
+        <section class="panel viewer-panel">
+          <canvas id="scene-canvas"></canvas>
+          <div class="overlay-card">
+            <h2>Idle presence</h2>
+            <p>Luna sways, blinks, and flicks her tail while the scene runs.</p>
+          </div>
+        </section>
+
+        <section class="panel chat-panel">
+          <div class="panel-title">
+            <h2>Conversation</h2>
+            <span>OpenRouter</span>
+          </div>
+
+          <div id="message-log" class="message-log"></div>
+
+          <form id="chat-form" class="chat-form">
+            <label class="field">
+              <span>OpenRouter API key</span>
+              <input id="api-key" type="password" placeholder="Enter your key" />
+            </label>
+
+            <label class="field">
+              <span>Message</span>
+              <textarea id="prompt-input" rows="3" placeholder="Ask Luna something..."></textarea>
+            </label>
+
+            <button type="submit">Send</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
