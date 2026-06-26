@@ -4,8 +4,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRMLoaderPlugin, VRMUtils } from 'https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2/lib/three-vrm.module.min.js';
 
 // ─── DEFAULT API KEYS ────────────────────────────────────────────────────────
-const DEFAULT_OPENROUTER_KEY  = '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';
-const DEFAULT_ELEVENLABS_KEY  = 'sk_739ceaf6f325561e41cd23d777f8bbe1e8038dc8c0abe9c9';
+const DEFAULT_OPENROUTER_KEY  = '';
+const DEFAULT_ELEVENLABS_KEY  = '';
 const ELEVENLABS_VOICE_ID     = 'EXAVITQu4vr4xnSDxMaL';
 const DEFAULT_MODEL_ID        = 'openrouter/free';
 // ─────────────────────────────────────────────────────────────────────────────
@@ -556,9 +556,7 @@ async function callOpenRouter(history){
     method: 'POST',
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${state.openRouterKey}`,
-      'HTTP-Referer':  window.location.href,
-      'X-Title':       'Luna AI'
+      'Authorization': `Bearer ${state.openRouterKey}`
     },
     body: JSON.stringify({
       model:      state.modelId,
@@ -572,10 +570,17 @@ async function callOpenRouter(history){
     throw new Error(`OpenRouter ${res.status} — ${body.slice(0, 200)}`);
   }
 
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if(!content) throw new Error('Empty response from OpenRouter');
-  return content.trim();
+  const data = await res.json().catch(() => null);
+  const content = data?.choices?.[0]?.message?.content
+    || data?.output?.[0]?.content?.[0]?.text
+    || data?.output?.[0]?.content?.text
+    || data?.response
+    || data?.text;
+  if(!content){
+    const errorDetail = data?.error?.message || data?.detail || JSON.stringify(data || {});
+    throw new Error(`Empty response from OpenRouter${errorDetail ? ': ' + errorDetail : ''}`);
+  }
+  return String(content).trim();
 }
 
 function autoGrow(){
