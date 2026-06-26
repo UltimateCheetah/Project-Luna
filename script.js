@@ -152,12 +152,13 @@ chatForm.addEventListener('submit', async (event) => {
   appendMessage('assistant', 'Thinking…');
 
   try {
+    const siteUrl = window.location.href || 'https://project-luna.example';
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': window.location.href,
+        'HTTP-Referer': siteUrl,
         'X-Title': 'Project Luna'
       },
       body: JSON.stringify({

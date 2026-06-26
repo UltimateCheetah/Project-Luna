@@ -14,13 +14,16 @@ Project Luna is a dark, pink-tinted web experience featuring a 3D avatar scene a
 - style.css: visual styling
 - script.js: Three.js scene, animation, and OpenRouter chat logic
 
-## Run locally
-1. Start a simple static server from the project folder:
-   - Python: `python3 -m http.server 8000`
-2. Open http://localhost:8000 in your browser.
-3. Enter an OpenRouter API key and send a message.
+## Deploy as a website
+This project is a static website and can be hosted on GitHub Pages, Netlify, Vercel, or any other static host.
 
-## Notes
+### GitHub Pages
+1. Push this repository to GitHub.
+2. Open the repository settings and enable GitHub Pages.
+3. Select the GitHub Actions workflow as the source if prompted.
+4. Your site will be published at a GitHub Pages URL.
+
+### Notes
 - The avatar model is loaded from:
   https://raw.githubusercontent.com/UltimateCheetah/Project-Luna/main/Luna_V2.vrm
 - A browser with WebGL support is required for the 3D scene.
