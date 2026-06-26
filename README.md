@@ -27,7 +27,8 @@ To Customize Luna, click the gear at the top right.
 3. Create a github repository and upload the model
 4. Go to the file and copy the link (It should be something like https://github.com/User/Repo/blob/Branch/model.vrm)
 5. Remove /blob and replace github.com with raw.githubusercontent
-6. Paste into the avatar loader
+6. It should look like https://raw.githubusercontent.com/User/Repo/Branch/model.vrm
+7. Paste into the avatar loader
 
 ### Notes
 - The avatar model is loaded from:
