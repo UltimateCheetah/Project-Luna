@@ -1,60 +1,172 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Project Luna is a dark, pink-tinted web experience with a 3D avatar and OpenRouter chat." />
-    <meta name="theme-color" content="#05030a" />
-    <title>Project Luna</title>
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark">✦</span>
-          <div>
-            <h1>Project Luna</h1>
-            <p>Dark, pink-tinted companion experience</p>
-          </div>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
+<title>Luna AI</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <div id="viewport-wrap">
+    <canvas id="canvas-3d"></canvas>
+    <div id="loading-veil">
+      <div class="loader-glyph"></div>
+      <div class="ltext">waking luna · loading mesh</div>
+    </div>
+  </div>
+
+  <div id="topbar">
+    <div class="brand">
+      <span class="mark" id="brand-name">Luna AI</span>
+      <span class="sub" id="brand-sub">gamer catgirl companion</span>
+    </div>
+    <div class="top-actions">
+      <div class="status-pill" id="status-pill" title="Connection status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">WAKING UP</span>
+      </div>
+      <button class="icon-btn" id="open-settings" title="Settings" aria-label="Open settings">
+        <svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="mood-readout">
+    sync state
+    <span class="mood-word" id="mood-word">dormant</span>
+  </div>
+
+  <div id="anim-controls"></div>
+
+  <div id="dialogue-bar">
+    <div id="dialogue-inner">
+      <div id="dialogue-head">
+        <div id="dialogue-speaker">
+          <span class="paw">🐾</span>
+          <span class="name" id="speaker-name">Luna</span>
         </div>
-        <div class="status-pill">Live • OpenRouter ready</div>
-      </header>
+        <div id="dialogue-head-actions">
+          <button class="ghost-btn" id="open-full-chat" title="Full chat view">
+            <svg width="13" height="13" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <span>Full chat</span>
+          </button>
+        </div>
+      </div>
+      <div id="latest-line" class="placeholder">say hi to wake her up...</div>
+      <div id="composer-inner">
+        <textarea id="msg-input" rows="1" placeholder="say something..."></textarea>
+        <button id="mic-btn" aria-label="Voice input" title="Speak to Luna">
+          <svg width="15" height="15" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button id="send-btn" aria-label="Send message">
+          <svg width="15" height="15" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div id="mic-status"></div>
+    </div>
+  </div>
 
-      <main class="layout">
-        <section class="panel viewer-panel">
-          <canvas id="scene-canvas"></canvas>
-          <div class="overlay-card">
-            <h2>Idle presence</h2>
-            <p>Luna sways, blinks, and flicks her tail while the scene runs.</p>
-          </div>
-        </section>
+  <div id="full-chat">
+    <div id="full-chat-head">
+      <h2><span class="paw">🐾</span> <span class="name" id="full-chat-name">Luna</span></h2>
+      <button class="icon-btn" id="close-full-chat" aria-label="Close full chat">
+        <svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="full-chat-scroll"></div>
+    <div id="full-chat-composer"></div>
+  </div>
 
-        <section class="panel chat-panel">
-          <div class="panel-title">
-            <h2>Conversation</h2>
-            <span>OpenRouter</span>
-          </div>
+</div>
 
-          <div id="message-log" class="message-log"></div>
+<div class="veil" id="settings-veil">
+  <div class="sheet" id="settings-sheet">
+    <h2>Settings</h2>
+    <div class="sub">Pick a personality, connect your keys, and optionally swap the 3D model.</div>
 
-          <form id="chat-form" class="chat-form">
-            <label class="field">
-              <span>OpenRouter API key</span>
-              <input id="api-key" type="password" placeholder="Enter your key" />
-            </label>
+    <div class="section-divider">personality</div>
+    <div id="persona-grid"></div>
+    <button class="btn link" id="open-about-from-settings" style="margin-top:18px;">→ Tell her about you</button>
 
-            <label class="field">
-              <span>Message</span>
-              <textarea id="prompt-input" rows="3" placeholder="Ask Luna something..."></textarea>
-            </label>
-
-            <button type="submit">Send</button>
-          </form>
-        </section>
-      </main>
+    <div class="section-divider">connection</div>
+    <div class="field">
+      <label for="gemini-key">Gemini API key</label>
+      <input type="password" id="gemini-key" placeholder="AIza..." autocomplete="off" />
+      <div class="note">Free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</div>
+    </div>
+    <div class="field">
+      <label for="elevenlabs-key">ElevenLabs API key (TTS)</label>
+      <input type="password" id="elevenlabs-key" placeholder="sk_..." autocomplete="off" />
+      <div class="note">
+        Get a free key at <a href="https://elevenlabs.io" target="_blank" rel="noopener">elevenlabs.io</a> →
+        Profile → API Keys. Then pick a voice ID from
+        <a href="https://elevenlabs.io/voice-library" target="_blank" rel="noopener">elevenlabs.io/voice-library</a>
+        and paste it into <code>ELEVENLABS_VOICE_ID</code> at the top of <code>script.js</code>.
+        Leave blank to disable TTS.
+      </div>
     </div>
 
-    <script type="module" src="./script.js"></script>
-  </body>
-</html>
+    <div class="section-divider">3D model</div>
+    <div class="field">
+      <label for="model-url-input">Character .glb / .vrm URL</label>
+      <input type="text" id="model-url-input" placeholder="https://yourhost.com/luna.glb" />
+      <div class="note">Paste a rigged model URL to replace the placeholder.</div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn" id="clear-chat-btn">Clear chat</button>
+      <button class="btn" id="clear-all-btn">Clear all</button>
+      <button class="btn primary" id="save-settings-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="about-veil">
+  <div class="sheet" id="about-sheet">
+    <h2>About You</h2>
+    <div class="sub">Context Luna keeps in mind while you talk. Stored only in this browser.</div>
+    <div class="field">
+      <label for="user-name">Your name</label>
+      <input type="text" id="user-name" placeholder="What should she call you?" />
+    </div>
+    <div class="field">
+      <label for="user-about">Tell her about yourself</label>
+      <textarea id="user-about" placeholder="Interests, games you play, sense of humor..."></textarea>
+    </div>
+    <div class="field">
+      <label for="user-notes">Anything else to keep in mind</label>
+      <textarea id="user-notes" placeholder="Inside jokes, how you like to be talked to..."></textarea>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn" id="back-to-settings-btn">← Back</button>
+      <button class="btn primary" id="save-about-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="key-veil">
+  <div id="key-card">
+    <div class="paw-big">🐾</div>
+    <h2>hii, I'm Luna!</h2>
+    <p>before I can wake up properly I need a Gemini key to think with — it's free and takes like 30 seconds to grab.</p>
+    <input type="password" id="key-card-input" placeholder="paste your Gemini API key" autocomplete="off" />
+    <button class="btn primary" id="key-card-save" style="width:100%;">wake her up</button>
+    <div class="note">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="script.js"></script>
+
+</body>
+    </html>
