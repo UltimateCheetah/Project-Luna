@@ -442,7 +442,7 @@ async function speakText(text){
   const key = state.elevenLabsKey;
   if(!key || !text) return;
   if(currentAudio){ currentAudio.pause(); currentAudio = null; }
-  const clean = text.replace(/[*_`#>~]/g, '').replace(/\n+/g, ' ').trim();
+  const clean = text.replace(/[*_`#>]/g, '').replace(/\n~+/g, ' ').trim();
   try{
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
       method: 'POST',
