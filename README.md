@@ -8,6 +8,7 @@ Project Luna is a modern, user-friendly AI anime wiafu web experience featuring 
 - Realistic animations
 - Message box for chatting with Luna
 - OpenRouter API integration for model responses
+- Beta! Backgrounds
 
 ## Set Up
 1. Go to https://ultimatecheetah.github.io/Project-Luna/
