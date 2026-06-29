@@ -1035,7 +1035,7 @@ async function regenerateLastReply(){
 }
 
 // Quick-action button wiring
-continueBtn.addEventListener('click', () => sendMessage('Please continue~'));
+continueBtn.addEventListener('click', () => sendMessage(''));
 regenBtn.addEventListener('click', regenerateLastReply);
 
 // ─── OPENROUTER API ──────────────────────────────────────────────────────────
