@@ -8,7 +8,6 @@ Project Luna is a modern, user-friendly AI anime wiafu web experience featuring 
 - Realistic animations
 - Message box for chatting with Luna
 - OpenRouter API integration for model responses
-- Beta! Backgrounds
 
 ## Set Up
 1. Go to https://ultimatecheetah.github.io/Project-Luna/
@@ -30,6 +29,11 @@ To Customize Luna, click the gear at the top right.
 5. Remove /blob and replace github.com with raw.githubusercontent
 6. It should look like https://raw.githubusercontent.com/User/Repo/Branch/model.vrm
 7. Paste into the avatar loader
+
+## Upcoming Features
+- 3D Background
+- Facial Expressions
+- Regenerate/Continue buttons
 
 ### Notes
 - The avatar model is loaded from:
