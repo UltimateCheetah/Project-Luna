@@ -653,6 +653,9 @@ async function sendMessage(){
   if(!text || state.isSending) return;
   if(!state.openRouterKey){ openKeyCard(); return; }
 
+  // Unlock/resume the audio graph inside this user gesture so TTS is audible.
+  ensureVoiceAudioGraph();
+
   msgInput.value = '';
   autoGrow();
 
