@@ -182,76 +182,91 @@ function createGamerRoom(){
   roomGroup.name = 'gamerRoom';
   scene.add(roomGroup);
 
-  // ─── MATERIALS ──────────────────────────────────────────────────────────
+  // ─── SHARED MATERIALS ───────────────────────────────────────────────────
+  // Dark plum walls with subtle sheen
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x2a1a2e, roughness: 0.55, metalness: 0.05
+    color: 0x271a30, roughness: 0.5, metalness: 0.08
   });
+  // Rich dark floor with slight reflection
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x1a0e1c, roughness: 0.3, metalness: 0.5
+    color: 0x150c18, roughness: 0.22, metalness: 0.6
   });
+  // Signature hot pink — matte with soft glow
   const pinkMat = new THREE.MeshStandardMaterial({
-    color: 0xff6ba8, roughness: 0.2, metalness: 0.3,
-    emissive: 0xff2d7a, emissiveIntensity: 0.3
+    color: 0xff5ca0, roughness: 0.18, metalness: 0.25,
+    emissive: 0xff2d7a, emissiveIntensity: 0.35
   });
+  // Soft pastel pink accent
   const accentMat = new THREE.MeshStandardMaterial({
-    color: 0xff8fd4, roughness: 0.15, metalness: 0.4,
-    emissive: 0xff5ca8, emissiveIntensity: 0.45
+    color: 0xff8fd4, roughness: 0.12, metalness: 0.3,
+    emissive: 0xff5cb8, emissiveIntensity: 0.5
   });
+  // Near-black for contrast
   const darkMat = new THREE.MeshStandardMaterial({
-    color: 0x0d0812, roughness: 0.6, metalness: 0.2
+    color: 0x0a0612, roughness: 0.55, metalness: 0.15
   });
+  // Monitor screen — glowing emissive
   const screenMat = new THREE.MeshStandardMaterial({
-    color: 0x1a0a2e, roughness: 0.1, metalness: 0.1,
-    emissive: 0xff8fd4, emissiveIntensity: 0.6
+    color: 0x18082e, roughness: 0.05, metalness: 0.05,
+    emissive: 0xff8fd4, emissiveIntensity: 0.7
   });
   const screenGlowMat = new THREE.MeshBasicMaterial({
-    color: 0xff8fd4, transparent: true, opacity: 0.25
+    color: 0xff8fd4, transparent: true, opacity: 0.2
   });
+  // Dark purple-blue desk surface
   const deskMat = new THREE.MeshStandardMaterial({
-    color: 0x322040, roughness: 0.25, metalness: 0.5
+    color: 0x2e1c3c, roughness: 0.2, metalness: 0.55
   });
-  const ledMat = new THREE.MeshBasicMaterial({ color: 0xff8fd4 });
-  const ledMat2 = new THREE.MeshBasicMaterial({ color: 0xb9a6ff });
+  // Pure emissive LED
+  const ledPink = new THREE.MeshBasicMaterial({ color: 0xff8fd4 });
+  const ledLilac = new THREE.MeshBasicMaterial({ color: 0xc9a6ff });
+  // White-ish for subtle details
+  const whiteMat = new THREE.MeshStandardMaterial({
+    color: 0xf5f0fa, roughness: 0.3, metalness: 0.1,
+    emissive: 0x332244, emissiveIntensity: 0.15
+  });
 
   // ─── FLOOR ──────────────────────────────────────────────────────────────
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(12, 10),
-    floorMat
-  );
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 9), floorMat);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, -0.02, 0.5);
+  floor.position.set(0, -0.01, 0.5);
   floor.receiveShadow = true;
   roomGroup.add(floor);
 
-  // Floor grid lines (gamer aesthetic)
-  const gridHelper = new THREE.PolarGridHelper(5, 64, 48, 256, 0xff2d7a, 0xff2d7a);
-  gridHelper.position.y = -0.01;
+  // Floor accent — large soft pink circle under Luna
+  const floorGlow = new THREE.Mesh(
+    new THREE.RingGeometry(1.2, 1.35, 64),
+    new THREE.MeshBasicMaterial({ color: 0xff8fd4, side: THREE.DoubleSide, transparent: true, opacity: 0.4 })
+  );
+  floorGlow.rotation.x = -Math.PI / 2;
+  floorGlow.position.set(0, 0.001, 0.5);
+  roomGroup.add(floorGlow);
+
+  // Subtle grid on floor
+  const gridHelper = new THREE.PolarGridHelper(5, 64, 36, 256, 0xff2d7a, 0xff2d7a);
+  gridHelper.position.y = 0.002;
   roomGroup.add(gridHelper);
 
   // ─── BACK WALL ──────────────────────────────────────────────────────────
-  const backWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(12, 6),
-    wallMat
-  );
-  backWall.position.set(0, 3, -4.5);
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), wallMat);
+  backWall.position.set(0, 3, -4.0);
   backWall.receiveShadow = true;
   roomGroup.add(backWall);
 
+  // Back wall accent stripe
+  const backStripe = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.06), accentMat);
+  backStripe.position.set(0, 2.15, -3.97);
+  roomGroup.add(backStripe);
+
   // ─── LEFT WALL ──────────────────────────────────────────────────────────
-  const leftWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(10, 6),
-    wallMat
-  );
+  const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), wallMat);
   leftWall.position.set(-6, 3, 0.5);
   leftWall.rotation.y = Math.PI / 2;
   leftWall.receiveShadow = true;
   roomGroup.add(leftWall);
 
   // ─── RIGHT WALL ─────────────────────────────────────────────────────────
-  const rightWall = new THREE.Mesh(
-    new THREE.PlaneGeometry(10, 6),
-    wallMat
-  );
+  const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), wallMat);
   rightWall.position.set(6, 3, 0.5);
   rightWall.rotation.y = -Math.PI / 2;
   rightWall.receiveShadow = true;
@@ -259,286 +274,399 @@ function createGamerRoom(){
 
   // ─── CEILING ────────────────────────────────────────────────────────────
   const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(12, 10),
-    new THREE.MeshStandardMaterial({ color: 0x1a1024, roughness: 0.6, metalness: 0.05 })
+    new THREE.PlaneGeometry(12, 9),
+    new THREE.MeshStandardMaterial({ color: 0x1a0e24, roughness: 0.55, metalness: 0.05 })
   );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(0, 6, 0.5);
   roomGroup.add(ceiling);
 
-  // ─── PINK LED STRIPS ────────────────────────────────────────────────────
-  function createLEDStrip(x, y, z, rotY, length, mat){
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(length, 0.04, 0.04), mat);
-    strip.position.set(x, y, z);
-    strip.rotation.y = rotY;
-    return strip;
+  // ─── LED STRIPS ─────────────────────────────────────────────────────────
+  function ledStrip(x, y, z, rotY, len, mat){
+    const s = new THREE.Mesh(new THREE.BoxGeometry(len, 0.03, 0.06), mat);
+    s.position.set(x, y, z);
+    s.rotation.y = rotY;
+    return s;
   }
-  // Wall/ceiling edges
-  roomGroup.add(createLEDStrip(0, 5.98, -4.5, 0, 12, ledMat));
-  roomGroup.add(createLEDStrip(0, 0.02, -4.5, 0, 12, ledMat));
-  roomGroup.add(createLEDStrip(-5.98, 5.98, 0.5, Math.PI/2, 10, ledMat2));
-  roomGroup.add(createLEDStrip(-5.98, 0.02, 0.5, Math.PI/2, 10, ledMat2));
-  roomGroup.add(createLEDStrip(5.98, 5.98, 0.5, -Math.PI/2, 10, ledMat2));
-  roomGroup.add(createLEDStrip(5.98, 0.02, 0.5, -Math.PI/2, 10, ledMat2));
+  // Crown moulding — pink LEDs at wall-ceiling junctions
+  roomGroup.add(ledStrip(0, 5.98, -4.0, 0, 12, ledPink));
+  roomGroup.add(ledStrip(-5.98, 5.98, 0.5, Math.PI/2, 9, ledLilac));
+  roomGroup.add(ledStrip(5.98, 5.98, 0.5, -Math.PI/2, 9, ledLilac));
+  // Baseboard LEDs
+  roomGroup.add(ledStrip(0, 0.05, -4.0, 0, 12, ledPink));
+  roomGroup.add(ledStrip(-5.98, 0.05, 0.5, Math.PI/2, 9, ledLilac));
+  roomGroup.add(ledStrip(5.98, 0.05, 0.5, -Math.PI/2, 9, ledLilac));
 
   // ─── GAMING DESK ────────────────────────────────────────────────────────
   const deskGroup = new THREE.Group();
-  deskGroup.position.set(0, 0, -3);
+  deskGroup.position.set(0, 0, -2.85);
 
-  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(3, 0.08, 1.5), deskMat);
-  deskTop.position.y = 0.95;
+  // Desktop
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.07, 1.3), deskMat);
+  deskTop.position.y = 0.92;
   deskTop.castShadow = true;
   deskTop.receiveShadow = true;
   deskGroup.add(deskTop);
 
-  // Desk legs
-  for(let lx = -1.2; lx <= 1.2; lx += 0.8){
-    for(let lz = -0.5; lz <= 0.5; lz += 0.5){
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.95, 0.06), darkMat);
-      leg.position.set(lx, 0.475, lz);
-      leg.castShadow = true;
-      deskGroup.add(leg);
-    }
-  }
+  // Legs (slightly inset, tapered look via smaller bottom)
+  const legPositions = [[-1.15, -0.45], [-0.38, -0.45], [0.38, -0.45], [1.15, -0.45], [-1.15, 0.45], [1.15, 0.45]];
+  legPositions.forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.92, 8), darkMat);
+    leg.position.set(lx, 0.46, lz);
+    leg.castShadow = true;
+    deskGroup.add(leg);
+  });
 
-  // Desk front panel with pink glow
-  const deskFront = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.25, 0.04), accentMat);
-  deskFront.position.set(0, 0.85, 0.76);
-  deskGroup.add(deskFront);
+  // Desk edge glow strip
+  const deskEdge = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.04, 0.05), ledPink);
+  deskEdge.position.set(0, 0.87, 0.67);
+  deskGroup.add(deskEdge);
 
   roomGroup.add(deskGroup);
 
   // ─── MONITOR ────────────────────────────────────────────────────────────
   const monitorGroup = new THREE.Group();
-  monitorGroup.position.set(0, 1.8, -3.4);
+  monitorGroup.position.set(0, 1.75, -3.15);
 
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.95), screenMat);
-  screen.castShadow = true;
-  monitorGroup.add(screen);
+  // Screen panel
+  const screenPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.88), screenMat);
+  monitorGroup.add(screenPanel);
 
-  const screenGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.64, 0.99), screenGlowMat);
-  screenGlow.position.z = -0.01;
-  monitorGroup.add(screenGlow);
+  // Screen glow (slightly larger, behind screen for bloom effect)
+  const glowPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.58, 0.95), screenGlowMat);
+  glowPanel.position.z = -0.015;
+  monitorGroup.add(glowPanel);
 
-  const bezel = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.08, 0.04), darkMat);
-  bezel.position.z = -0.03;
-  monitorGroup.add(bezel);
+  // Bezel frame
+  const bezelOuter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.04, 0.05), darkMat);
+  bezelOuter.position.z = -0.035;
+  monitorGroup.add(bezelOuter);
 
-  const stand = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.55, 0.06), deskMat);
-  stand.position.set(0, -0.72, 0);
-  monitorGroup.add(stand);
+  // Monitor back housing
+  const monitorBack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.95, 0.12), darkMat);
+  monitorBack.position.z = -0.1;
+  monitorGroup.add(monitorBack);
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.05, 32), pinkMat);
-  base.position.set(0, -1.0, 0);
-  monitorGroup.add(base);
+  // Stand neck
+  const standNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 16), deskMat);
+  standNeck.position.set(0, -0.65, 0);
+  monitorGroup.add(standNeck);
+
+  // Stand base
+  const standBase = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.05, 32), pinkMat);
+  standBase.position.set(0, -0.92, 0);
+  monitorGroup.add(standBase);
+
+  // Stand base ring
+  const standRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.24, 0.02, 8, 32),
+    ledPink
+  );
+  standRing.rotation.x = Math.PI / 2;
+  standRing.position.set(0, -0.89, 0);
+  monitorGroup.add(standRing);
 
   roomGroup.add(monitorGroup);
 
+  // ─── CAT EARS ON MONITOR ────────────────────────────────────────────────
+  function makeEar(x, lean){
+    const g = new THREE.Group();
+    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 8), pinkMat);
+    outer.position.y = 0.11;
+    g.add(outer);
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.14, 8), accentMat);
+    inner.position.y = 0.13;
+    g.add(inner);
+    g.position.set(x, 2.24, -3.1);
+    g.rotation.z = lean;
+    return g;
+  }
+  roomGroup.add(makeEar(-0.28, 0.35));
+  roomGroup.add(makeEar(0.28, -0.35));
+
   // ─── KEYBOARD ───────────────────────────────────────────────────────────
-  const kb = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.03, 0.35), pinkMat);
-  kb.position.set(0, 1.01, -2.72);
-  kb.rotation.x = -0.08;
-  roomGroup.add(kb);
+  const kbGroup = new THREE.Group();
+  kbGroup.position.set(0, 0.97, -2.55);
+  kbGroup.rotation.x = -0.06;
+  const kbBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.025, 0.32), pinkMat);
+  kbGroup.add(kbBase);
+  // Key rows
+  for(let r = 0; r < 5; r++){
+    const row = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.008, 0.04), accentMat);
+    row.position.set(0, 0.02 + r * 0.01, -0.12 + r * 0.05);
+    kbGroup.add(row);
+  }
+  roomGroup.add(kbGroup);
 
-  // ─── MOUSE ──────────────────────────────────────────────────────────────
-  const mouse = new THREE.Mesh(
-    new THREE.SphereGeometry(0.06, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    accentMat
-  );
-  mouse.scale.set(1, 0.5, 1.3);
-  mouse.position.set(0.65, 1.0, -2.7);
-  mouse.rotation.x = -0.05;
-  roomGroup.add(mouse);
-
-  // ─── MOUSEPAD ───────────────────────────────────────────────────────────
-  const mousepad = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.45), accentMat);
+  // ─── MOUSE + MOUSEPAD ───────────────────────────────────────────────────
+  const mousepad = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.4), accentMat);
   mousepad.rotation.x = -Math.PI / 2;
-  mousepad.position.set(0.65, 1.0, -2.65);
-  mousepad.material.opacity = 0.6;
-  mousepad.material.transparent = true;
+  mousepad.position.set(0.6, 0.955, -2.45);
   roomGroup.add(mousepad);
+
+  const mouseGeo = new THREE.SphereGeometry(0.05, 16, 8, 0, Math.PI*2, 0, Math.PI/2);
+  const mouseMesh = new THREE.Mesh(mouseGeo, pinkMat);
+  mouseMesh.scale.set(1, 0.55, 1.25);
+  mouseMesh.position.set(0.6, 0.975, -2.5);
+  roomGroup.add(mouseMesh);
 
   // ─── GAMING CHAIR ───────────────────────────────────────────────────────
   const chairGroup = new THREE.Group();
-  chairGroup.position.set(0, 0.42, -1.8);
+  chairGroup.position.set(0, 0.4, -1.6);
 
-  // Seat
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.65), pinkMat);
-  seat.position.y = 0;
+  // Seat cushion
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.6), pinkMat);
+  seat.position.y = 0.05;
+  seat.castShadow = true;
   chairGroup.add(seat);
 
+  // Seat front curve
+  const seatFront = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.65, 8), accentMat);
+  seatFront.rotation.x = Math.PI / 2;
+  seatFront.position.set(0, 0.02, 0.3);
+  chairGroup.add(seatFront);
+
   // Backrest
-  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.0, 0.1), accentMat);
-  backrest.position.set(0, 0.55, -0.3);
-  backrest.rotation.x = -0.05;
+  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.09), accentMat);
+  backrest.position.set(0, 0.5, -0.28);
+  backrest.rotation.x = -0.08;
+  backrest.castShadow = true;
   chairGroup.add(backrest);
 
+  // Backrest side wings
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), pinkMat);
+  wingL.position.set(-0.31, 0.5, -0.26);
+  wingL.rotation.z = 0.15;
+  chairGroup.add(wingL);
+  const wingR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), pinkMat);
+  wingR.position.set(0.31, 0.5, -0.26);
+  wingR.rotation.z = -0.15;
+  chairGroup.add(wingR);
+
   // Armrests
-  const armLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.5), deskMat);
-  armLeft.position.set(-0.38, 0.14, 0);
-  chairGroup.add(armLeft);
-  const armRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.5), deskMat);
-  armRight.position.set(0.38, 0.14, 0);
-  chairGroup.add(armRight);
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.42), deskMat);
+  armL.position.set(-0.36, 0.14, -0.05);
+  chairGroup.add(armL);
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.42), deskMat);
+  armR.position.set(0.36, 0.14, -0.05);
+  chairGroup.add(armR);
 
-  // Gas lift cylinder
-  const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.3, 16), darkMat);
-  cylinder.position.y = -0.22;
-  chairGroup.add(cylinder);
+  // Gas lift
+  const lift = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.28, 16), darkMat);
+  lift.position.y = -0.2;
+  chairGroup.add(lift);
 
-  // Base star
+  // Base — 5 spokes with wheels
   for(let i = 0; i < 5; i++){
-    const angle = (i / 5) * Math.PI * 2;
-    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.35), deskMat);
-    spoke.position.set(Math.sin(angle) * 0.15, -0.36, Math.cos(angle) * 0.15);
-    spoke.rotation.y = -angle;
+    const a = (i/5) * Math.PI * 2;
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.3), deskMat);
+    spoke.position.set(Math.sin(a)*0.14, -0.34, Math.cos(a)*0.14);
+    spoke.rotation.y = -a;
     chairGroup.add(spoke);
+    // Caster wheel
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8), darkMat);
+    wheel.rotation.x = Math.PI/2;
+    wheel.position.set(Math.sin(a)*0.28, -0.35, Math.cos(a)*0.28);
+    chairGroup.add(wheel);
   }
 
   roomGroup.add(chairGroup);
 
-  // ─── CAT EARS POSTER ON LEFT WALL ───────────────────────────────────────
-  const poster1 = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6), accentMat);
-  poster1.position.set(-5.97, 2.2, -0.5);
-  poster1.rotation.y = Math.PI / 2;
-  poster1.material.emissive = 0xff5ca8;
-  poster1.material.emissiveIntensity = 0.5;
-  roomGroup.add(poster1);
+  // ─── LEFT WALL: BIG NEON CAT SILHOUETTE ─────────────────────────────────
+  // Simple cat head silhouette from geometry
+  const catSilGroup = new THREE.Group();
+  catSilGroup.position.set(-5.97, 3.0, 0.0);
+  catSilGroup.rotation.y = Math.PI / 2;
 
-  // Poster frame
-  const posterFrame1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.7, 1.3), ledMat);
-  posterFrame1.position.set(-5.99, 2.2, -0.5);
-  posterFrame1.rotation.y = Math.PI / 2;
-  roomGroup.add(posterFrame1);
+  // Head circle
+  const catHead = new THREE.Mesh(new THREE.CircleGeometry(0.35, 32), accentMat);
+  catSilGroup.add(catHead);
+  // Left ear
+  const catEarL = new THREE.Mesh(
+    new THREE.ConeGeometry(0.18, 0.3, 3),
+    pinkMat
+  );
+  catEarL.position.set(-0.22, 0.42, 0);
+  catEarL.rotation.z = 0.3;
+  catSilGroup.add(catEarL);
+  // Right ear
+  const catEarR = new THREE.Mesh(
+    new THREE.ConeGeometry(0.18, 0.3, 3),
+    pinkMat
+  );
+  catEarR.position.set(0.22, 0.42, 0);
+  catEarR.rotation.z = -0.3;
+  catSilGroup.add(catEarR);
+  // Eyes
+  const eyeGeo = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16), ledLilac);
+  eyeGeo.position.set(-0.12, 0.05, 0.01);
+  catSilGroup.add(eyeGeo);
+  const eyeGeo2 = new THREE.Mesh(new THREE.CircleGeometry(0.06, 16), ledLilac);
+  eyeGeo2.position.set(0.12, 0.05, 0.01);
+  catSilGroup.add(eyeGeo2);
+  // Nose
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.06, 3), ledPink);
+  nose.position.set(0, -0.03, 0.01);
+  nose.rotation.z = Math.PI;
+  catSilGroup.add(nose);
 
-  // ─── PAW PRINT POSTER ON RIGHT WALL ─────────────────────────────────────
-  const poster2 = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.4), accentMat);
-  poster2.position.set(5.97, 2.2, 1.5);
-  poster2.rotation.y = -Math.PI / 2;
-  poster2.material.emissive = 0xff5ca8;
-  poster2.material.emissiveIntensity = 0.5;
-  roomGroup.add(poster2);
+  roomGroup.add(catSilGroup);
 
-  // Small paw prints on back wall
-  for(let i = 0; i < 5; i++){
-    const paw = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.09, 16), ledMat);
-    paw.position.set(-2 + i * 0.9, 4.2 + Math.sin(i * 1.2) * 0.3, -4.48);
-    roomGroup.add(paw);
-  }
+  // ─── RIGHT WALL: NEON GAMEPAD ───────────────────────────────────────────
+  const padGroup = new THREE.Group();
+  padGroup.position.set(5.97, 2.8, 1.2);
+  padGroup.rotation.y = -Math.PI / 2;
 
-  // ─── PINK CAT EARS ON TOP OF MONITOR ────────────────────────────────────
-  function createCatEar(x, z, rotY){
-    const earGroup = new THREE.Group();
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 16), pinkMat);
-    ear.position.y = 0.12;
-    earGroup.add(ear);
-    const innerEar = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 16), accentMat);
-    innerEar.position.y = 0.14;
-    earGroup.add(innerEar);
-    earGroup.position.set(x, 2.38, z);
-    earGroup.rotation.z = rotY;
-    return earGroup;
-  }
-  roomGroup.add(createCatEar(-0.35, -3.35, 0.35));
-  roomGroup.add(createCatEar(0.35, -3.35, -0.35));
+  // Controller body
+  const padBody = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.05), accentMat);
+  padBody.position.z = -0.01;
+  padGroup.add(padBody);
+  // D-pad
+  const dpad = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.02), ledPink);
+  dpad.position.set(-0.2, 0, 0.03);
+  padGroup.add(dpad);
+  const dpadH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.02), ledPink);
+  dpadH.position.set(-0.2, 0, 0.03);
+  padGroup.add(dpadH);
+  // Buttons
+  const btnGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.02, 16);
+  const btnA = new THREE.Mesh(btnGeo, ledLilac);
+  btnA.position.set(0.18, 0.04, 0.03);
+  btnA.rotation.x = Math.PI/2;
+  padGroup.add(btnA);
+  const btnB = new THREE.Mesh(btnGeo, ledLilac);
+  btnB.position.set(0.25, -0.02, 0.03);
+  btnB.rotation.x = Math.PI/2;
+  padGroup.add(btnB);
+  // Thumbsticks
+  const stickGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.06, 16);
+  const stickL = new THREE.Mesh(stickGeo, whiteMat);
+  stickL.position.set(-0.08, 0.06, 0.02);
+  stickL.rotation.x = Math.PI/2;
+  padGroup.add(stickL);
+  const stickR = new THREE.Mesh(stickGeo, whiteMat);
+  stickR.position.set(0.06, -0.08, 0.02);
+  stickR.rotation.x = Math.PI/2;
+  padGroup.add(stickR);
 
-  // ─── SHELF WITH CAT STUFF ───────────────────────────────────────────────
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(2, 0.06, 0.4), deskMat);
-  shelf.position.set(3.8, 2.8, -2.5);
+  roomGroup.add(padGroup);
+
+  // ─── BACK WALL: PIXEL HEART ─────────────────────────────────────────────
+  const heartGroup = new THREE.Group();
+  heartGroup.position.set(2.5, 3.8, -3.97);
+  // 7x7 pixel heart
+  const heartMap = [
+    [0,1,0,0,0,1,0],
+    [1,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,0],
+    [0,0,1,1,1,0,0],
+    [0,0,0,1,0,0,0],
+  ];
+  heartMap.forEach((row, ry) => {
+    row.forEach((on, rx) => {
+      if(!on) return;
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), ledPink);
+      p.position.set((rx-3)*0.08, (3-ry)*0.08, 0);
+      heartGroup.add(p);
+    });
+  });
+  roomGroup.add(heartGroup);
+
+  // ─── BACK WALL: "LUNA" TEXT WITH PAW PRINT ──────────────────────────────
+  // Simple paw print
+  const pawGroup = new THREE.Group();
+  pawGroup.position.set(-2.5, 3.8, -3.97);
+  // Main pad
+  const mainPad = new THREE.Mesh(new THREE.CircleGeometry(0.18, 16), pinkMat);
+  mainPad.scale.set(1, 0.8, 1);
+  pawGroup.add(mainPad);
+  // Toes
+  const toePos = [[0, 0.22], [-0.1, 0.18], [0.1, 0.18], [-0.04, 0.26]];
+  toePos.forEach(([tx, ty]) => {
+    const toe = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), pinkMat);
+    toe.position.set(tx, ty, 0.001);
+    pawGroup.add(toe);
+  });
+  roomGroup.add(pawGroup);
+
+  // ─── FLOATING SHELF ─────────────────────────────────────────────────────
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.35), deskMat);
+  shelf.position.set(3.5, 2.6, -2.3);
   shelf.castShadow = true;
   shelf.receiveShadow = true;
   roomGroup.add(shelf);
 
-  // Shelf brackets
-  const bracketL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), pinkMat);
-  bracketL.position.set(2.85, 2.65, -2.5);
-  roomGroup.add(bracketL);
-  const bracketR = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), pinkMat);
-  bracketR.position.set(4.75, 2.65, -2.5);
-  roomGroup.add(bracketR);
+  // Shelf bracket
+  const brackL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), pinkMat);
+  brackL.position.set(2.65, 2.49, -2.3);
+  roomGroup.add(brackL);
+  const brackR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), pinkMat);
+  brackR.position.set(4.35, 2.49, -2.3);
+  roomGroup.add(brackR);
 
-  // Energy drink can on shelf
-  const canBody = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.22, 16), pinkMat);
-  canBody.position.set(3.4, 2.96, -2.45);
-  roomGroup.add(canBody);
+  // Energy drink
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 16), pinkMat);
+  can.position.set(3.15, 2.75, -2.25);
+  roomGroup.add(can);
+  const canTop = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 16), accentMat);
+  canTop.position.set(3.15, 2.85, -2.25);
+  roomGroup.add(canTop);
 
-  // Controller on shelf
-  const controller = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.04, 0.3), accentMat);
-  controller.position.set(4.2, 2.96, -2.5);
-  controller.rotation.x = -0.4;
-  roomGroup.add(controller);
+  // Small controller
+  const miniPad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.26), accentMat);
+  miniPad.position.set(3.9, 2.65, -2.35);
+  miniPad.rotation.x = -0.35;
+  roomGroup.add(miniPad);
 
-  // ─── PIXEL HEART ON BACK WALL ───────────────────────────────────────────
-  const heartGroup = new THREE.Group();
-  heartGroup.position.set(2.8, 3.6, -4.48);
-  const heartPixels = [
-    [0,2],[1,1],[1,2],[1,3],[2,2],[3,1],[3,2],[3,3],[4,2]
-  ];
-  heartPixels.forEach(([cx, cy]) => {
-    const pixel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.02), ledMat);
-    pixel.position.set(cx * 0.09 - 0.18, -cy * 0.09 + 0.12, 0);
-    heartGroup.add(pixel);
-  });
-  roomGroup.add(heartGroup);
+  // ─── LIGHTING ───────────────────────────────────────────────────────────
+  roomLights = [];
 
-  // ─── NANAMIN CUBES ON LEFT WALL ─────────────────────────────────────────
-  for(let i = 0; i < 8; i++){
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), i % 2 === 0 ? pinkMat : accentMat);
-    cube.position.set(-5.97, 1.0 + i * 0.25, 2.0 + Math.sin(i * 0.7) * 0.35);
-    cube.rotation.set(i * 0.4, i * 0.6, i * 0.3);
-    roomGroup.add(cube);
-  }
+  // Main ambient
+  const ambient = new THREE.PointLight(0xff6ba8, 6, 12, 1.5);
+  ambient.position.set(0, 3.5, -2);
+  roomGroup.add(ambient);
+  roomLights.push(ambient);
 
-  // ─── ROOM LIGHTS ────────────────────────────────────────────────────────
-  // Ambient pink glow
-  const ambientPink = new THREE.PointLight(0xff6ba8, 8, 14, 1.5);
-  ambientPink.position.set(0, 3, -2);
-  roomGroup.add(ambientPink);
-  roomLights.push(ambientPink);
-
-  // Monitor backlight
-  const monitorGlow = new THREE.PointLight(0xff8fd4, 15, 6, 2);
-  monitorGlow.position.set(0, 1.8, -3.6);
-  roomGroup.add(monitorGlow);
-  roomLights.push(monitorGlow);
+  // Monitor glow
+  const monGlow = new THREE.PointLight(0xff8fd4, 10, 5, 2);
+  monGlow.position.set(0, 1.75, -3.3);
+  roomGroup.add(monGlow);
+  roomLights.push(monGlow);
 
   // Desk underglow
-  const deskGlow = new THREE.PointLight(0xff2d7a, 5, 3, 2);
-  deskGlow.position.set(0, 0.5, -2.5);
+  const deskGlow = new THREE.PointLight(0xff2d7a, 4, 2.5, 2);
+  deskGlow.position.set(0, 0.4, -2.3);
   roomGroup.add(deskGlow);
   roomLights.push(deskGlow);
 
-  // Ceiling light
-  const ceilingLight = new THREE.PointLight(0xb9a6ff, 4, 8, 2);
-  ceilingLight.position.set(0, 5.5, 0.5);
-  roomGroup.add(ceilingLight);
-  roomLights.push(ceilingLight);
+  // Ceiling pink
+  const ceilLight = new THREE.PointLight(0xc9a6ff, 3, 7, 2);
+  ceilLight.position.set(0, 5.5, 0.5);
+  roomGroup.add(ceilLight);
+  roomLights.push(ceilLight);
 
-  // Right wall accent
-  const rightAccent = new THREE.PointLight(0xff8fd4, 4, 5, 2);
-  rightAccent.position.set(5.5, 2.5, 1.5);
-  roomGroup.add(rightAccent);
-  roomLights.push(rightAccent);
+  // Right wall wash
+  const rightWash = new THREE.PointLight(0xff8fd4, 3, 4, 2);
+  rightWash.position.set(5, 2.5, 1.5);
+  roomGroup.add(rightWash);
+  roomLights.push(rightWash);
 
-  // Left wall accent
-  const leftAccent = new THREE.PointLight(0xb9a6ff, 3, 5, 2);
-  leftAccent.position.set(-5.5, 2.5, -1);
-  roomGroup.add(leftAccent);
-  roomLights.push(leftAccent);
+  // Left wall wash
+  const leftWash = new THREE.PointLight(0xb9a6ff, 2.5, 4, 2);
+  leftWash.position.set(-5, 2.5, -1);
+  roomGroup.add(leftWash);
+  roomLights.push(leftWash);
 
-  console.log('🐱 Pink cat gamer room built!');
+  console.log('🐱💖 Pink cat gamer room v2 built!');
 }
 
 function updateRoomPosition(){
-  if(!roomGroup || !controls) return;
-  // Smoothly follow the camera target (where Luna is) so the room parallaxes with orbit
-  const target = controls.target.clone();
-  // Keep room centered on the character at floor level, with slight parallax
-  const lerpFactor = 0.08;
-  roomGroup.position.x += (target.x * 0.5 - roomGroup.position.x) * lerpFactor;
-  roomGroup.position.z += (target.z * 0.3 - roomGroup.position.z) * lerpFactor;
-  // Keep the room at floor height
-  roomGroup.position.y = 0;
+  // Room is static — anchored at origin where Luna lives.
+  // No parallax, so Luna stays perfectly centered as you orbit.
+  if(roomGroup){
+    roomGroup.position.set(0, 0, 0);
+  }
 }
 
 function onResize(){
