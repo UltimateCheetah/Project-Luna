@@ -240,7 +240,7 @@ function tickProceduralIdle(dt){
   const tailWag = Math.sin(t * 0.8) * 0.15;
   const tailZ = Math.cos(t * 0.6) * 0.12;
   setBoneRot('tail', tailWag * 0.3, tailWag * 0.5, tailZ);
-
+  
   // Try to animate tail segments if they exist
   for(let i = 1; i <= 3; i++){
     const boneName = 'tail' + i;
@@ -805,40 +805,13 @@ const micStatus = document.getElementById('mic-status');
 const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 let recognizer = null, isRecording = false;
-let baseTextBeforeRecording = '';
-let committedSegments = [];   // finalized phrases for the CURRENT recording session
-let wantsRecording = false;   // user's intent — distinct from the API's actual running state
-let restartTimer = null;
-
-// Normalize for duplicate comparison: lowercase, trim, collapse whitespace,
-// strip trailing punctuation so "Hello." and "hello" are recognized as dupes.
-function normalizeForDedupe(s){
-  return s.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[.,!?]+$/, '');
-}
-
-function rebuildInputFromSegments(interimText){
-  const committed = committedSegments.join(' ');
-  msgInput.value = [baseTextBeforeRecording, committed, interimText].map(s => s.trim()).filter(Boolean).join(' ');
-  autoGrow();
-}
+let baseTextBeforeRecording = '', finalSegments = [];
 
 if(!SpeechAPI){
   micBtn.classList.add('unsupported');
 } else {
   recognizer = new SpeechAPI();
-  // BUGFIX: continuous=true is what triggers the "text repeats 2-5 times" bug
-  // on Android Chrome / many Chromium webviews — in continuous mode the engine
-  // periodically re-processes its own buffered audio and emits multiple
-  // separate isFinal results containing the SAME transcript text. That's a
-  // duplicate coming from the recognition engine itself, not something we can
-  // fix by changing how we read e.resultIndex.
-  //
-  // The fix is to run single-utterance sessions (continuous=false) and
-  // manually restart the recognizer on 'end' for as long as the user wants to
-  // keep recording, chaining sessions together ourselves. We also dedupe any
-  // final result that matches the immediately-previous one, as a second line
-  // of defense against engines that still emit a repeat within one session.
-  recognizer.continuous     = false;
+  recognizer.continuous     = true;
   recognizer.interimResults = true;
   recognizer.lang           = 'en-US';
 
@@ -852,67 +825,33 @@ if(!SpeechAPI){
     let interimText = '';
     for(let i = e.resultIndex; i < e.results.length; i++){
       const r = e.results[i];
-      if(r.isFinal){
-        const text = r[0].transcript.trim();
-        if(!text) continue;
-        const last = committedSegments[committedSegments.length - 1];
-        // Dedupe guard: skip if this final result is essentially identical to
-        // the last committed one (handles engines that still double-fire
-        // within a single session).
-        if(last && normalizeForDedupe(last) === normalizeForDedupe(text)) continue;
-        committedSegments.push(text);
-      } else {
-        interimText += (interimText ? ' ' : '') + r[0].transcript;
-      }
+      if(r.isFinal){ finalSegments[i] = r[0].transcript.trim(); interimText = ''; }
+      else          { interimText = r[0].transcript; }
     }
-    rebuildInputFromSegments(interimText);
+    const committed = finalSegments.filter(Boolean).join(' ');
+    msgInput.value = [baseTextBeforeRecording, committed, interimText].map(s => s.trim()).filter(Boolean).join(' ');
+    autoGrow();
   });
 
   recognizer.addEventListener('error', e => {
-    if(e.error === 'not-allowed'){
-      micStatus.textContent = 'mic permission denied';
-      wantsRecording = false;
-    } else if(e.error === 'no-speech'){
-      // Harmless — happens between phrases in chained single-shot mode. The
-      // 'end' handler below will restart us automatically if still wanted.
-    } else {
-      micStatus.textContent = '';
-    }
+    micStatus.textContent = e.error === 'not-allowed' ? 'mic permission denied' : '';
+    stopRecording();
   });
 
-  // Because continuous=false, the API fires 'end' after every utterance —
-  // including normal pauses between phrases. If the user still wants to be
-  // recording, immediately start a fresh session so it feels continuous from
-  // their perspective, without ever re-emitting old finals.
-  recognizer.addEventListener('end', () => {
-    isRecording = false;
-    if(wantsRecording){
-      clearTimeout(restartTimer);
-      restartTimer = setTimeout(() => {
-        if(!wantsRecording) return;
-        try{ recognizer.start(); } catch(e){ /* already starting/started */ }
-      }, 60);
-    } else {
-      micBtn.classList.remove('recording');
-      micStatus.textContent = '';
-    }
-  });
-
-  micBtn.addEventListener('click', () => wantsRecording ? stopRecording() : startRecording());
+  recognizer.addEventListener('end', stopRecording);
+  micBtn.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
 }
 
 function startRecording(){
-  if(!recognizer || wantsRecording) return;
-  wantsRecording = true;
+  if(!recognizer || isRecording) return;
   baseTextBeforeRecording = msgInput.value.trim();
-  committedSegments = [];
+  finalSegments = [];
   try{ recognizer.start(); } catch(e){ console.warn('Could not start recognizer', e); }
 }
 
 function stopRecording(){
   if(!recognizer) return;
-  wantsRecording = false;
-  clearTimeout(restartTimer);
+  isRecording = false;
   micBtn.classList.remove('recording');
   micStatus.textContent = '';
   try{ recognizer.stop(); } catch(e){}
