@@ -240,7 +240,7 @@ function tickProceduralIdle(dt){
   const tailWag = Math.sin(t * 0.8) * 0.15;
   const tailZ = Math.cos(t * 0.6) * 0.12;
   setBoneRot('tail', tailWag * 0.3, tailWag * 0.5, tailZ);
-  
+
   // Try to animate tail segments if they exist
   for(let i = 1; i <= 3; i++){
     const boneName = 'tail' + i;
@@ -805,7 +805,9 @@ const micStatus = document.getElementById('mic-status');
 const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 let recognizer = null, isRecording = false;
-let baseTextBeforeRecording = '', finalSegments = [];
+let baseTextBeforeRecording = '';
+// NOTE: we intentionally no longer key finalSegments by e.resultIndex. See the
+// 'result' handler below for why.
 
 if(!SpeechAPI){
   micBtn.classList.add('unsupported');
@@ -822,13 +824,27 @@ if(!SpeechAPI){
   });
 
   recognizer.addEventListener('result', e => {
+    // BUGFIX: previously this rebuilt the transcript incrementally using
+    // e.resultIndex, storing each final chunk into finalSegments[i]. On some
+    // browsers (notably Android Chrome) in continuous mode, 'result' events can
+    // re-fire with resultIndex pointing back at results that were already
+    // marked final, which caused those words to get appended again — producing
+    // the "text repeats 2-5 times" bug.
+    //
+    // The fix: ignore resultIndex entirely and rebuild the FULL transcript from
+    // scratch out of e.results on every event. This is idempotent — however
+    // many times a given result fires, the rebuilt string is identical, so
+    // nothing can accumulate duplicates.
+    let committed = '';
     let interimText = '';
-    for(let i = e.resultIndex; i < e.results.length; i++){
+    for(let i = 0; i < e.results.length; i++){
       const r = e.results[i];
-      if(r.isFinal){ finalSegments[i] = r[0].transcript.trim(); interimText = ''; }
-      else          { interimText = r[0].transcript; }
+      if(r.isFinal){
+        committed += (committed ? ' ' : '') + r[0].transcript.trim();
+      } else {
+        interimText += (interimText ? ' ' : '') + r[0].transcript;
+      }
     }
-    const committed = finalSegments.filter(Boolean).join(' ');
     msgInput.value = [baseTextBeforeRecording, committed, interimText].map(s => s.trim()).filter(Boolean).join(' ');
     autoGrow();
   });
@@ -845,7 +861,6 @@ if(!SpeechAPI){
 function startRecording(){
   if(!recognizer || isRecording) return;
   baseTextBeforeRecording = msgInput.value.trim();
-  finalSegments = [];
   try{ recognizer.start(); } catch(e){ console.warn('Could not start recognizer', e); }
 }
 
