@@ -107,7 +107,9 @@ let blinkCountdown = 2 + Math.random() * 4;
 let blinkProgress = 0;
 let blinkDouble = false;
 let lipLevel = 0;
+let lipShape = 0;
 let lipFallbackEndsAt = 0;
+let lipFallbackStart = 0;
 let voiceAudioCtx = null;
 let voiceAudioSource = null;
 let voiceAudioAnalyser = null;
@@ -306,35 +308,54 @@ function ensureVoiceAudioGraph(){
   }
 }
 
+function startLipFallback(durationMs){
+  lipFallbackStart = performance.now();
+  lipFallbackEndsAt = lipFallbackStart + durationMs;
+}
+
 function tickLipSync(dt){
   const em = currentVrm?.expressionManager;
   if(!em) return;
 
   let target = 0;
+  let shapeTarget = 0;
+
   if(voiceAudioAnalyser && !voiceAudio.paused){
     try{
       voiceAudioAnalyser.getByteFrequencyData(voiceAudioData);
-      let sum = 0;
-      let count = 0;
-      const end = Math.min(41, voiceAudioData.length);
-      for(let i = 2; i < end; i++){
-        sum += voiceAudioData[i];
-        count++;
-      }
-      const avg = count ? sum / count : 0;
-      target = Math.max(0, Math.min(1, (avg - 18) / 72));
+      const n = voiceAudioData.length;
+      let low = 0, lowN = 0, mid = 0, midN = 0;
+      for(let i = 2;  i < Math.min(24, n); i++){ low += voiceAudioData[i]; lowN++; }
+      for(let i = 24; i < Math.min(64, n); i++){ mid += voiceAudioData[i]; midN++; }
+      const lowAvg = lowN ? low / lowN : 0;
+      const midAvg = midN ? mid / midN : 0;
+      const loud = Math.max(lowAvg, midAvg * 0.9);
+      target = Math.max(0, Math.min(1, (loud - 16) / 70));
+      const tot = lowAvg + midAvg;
+      shapeTarget = tot > 1 ? (midAvg - lowAvg) / tot : 0;
     } catch(e){
       target = 0;
     }
   } else if(performance.now() < lipFallbackEndsAt){
-    const t = performance.now() * 0.001;
-    target = Math.max(0, Math.min(1, Math.sin(t * 13.5) * 0.35 + Math.sin(t * 22.7 + 1.4) * 0.2 + 0.45));
+    const t = (performance.now() - lipFallbackStart) * 0.001;
+    let env = Math.max(0, Math.sin(t * 20.7)) * (0.55 + 0.45 * Math.sin(t * 4.3 + 1.1));
+    env *= 0.7 + 0.3 * Math.sin(t * 1.7);
+    target = Math.max(0, Math.min(1, env));
+    shapeTarget = Math.sin(t * 2.1) * 0.5;
   }
 
-  lipLevel += (target - lipLevel) * Math.min(1, dt * 18);
-  em.setValue('aa', lipLevel * 0.9);
-  em.setValue('ih', lipLevel * 0.15);
-  em.setValue('ou', lipLevel * 0.1);
+  // Mouth opens quickly and closes a little slower for a natural feel.
+  const k = target > lipLevel ? dt * 22 : dt * 12;
+  lipLevel += (target - lipLevel) * Math.min(1, k);
+  lipShape += (shapeTarget - lipShape) * Math.min(1, dt * 10);
+
+  const spread = Math.max(0,  lipShape);
+  const round  = Math.max(0, -lipShape);
+  em.setValue('aa', lipLevel * (1 - 0.45 * (spread + round)));
+  em.setValue('ih', lipLevel * spread * 0.7);
+  em.setValue('ee', lipLevel * spread * 0.3);
+  em.setValue('ou', lipLevel * round * 0.7);
+  em.setValue('oh', lipLevel * round * 0.4);
 }
 
 function animate(){
@@ -424,7 +445,9 @@ function onModelLoad(gltf){
   blinkProgress = 0;
   blinkDouble = false;
   lipLevel = 0;
+  lipShape = 0;
   lipFallbackEndsAt = 0;
+  lipFallbackStart = 0;
 
   loadingVeil.classList.add('hidden');
   setMood('curious');
@@ -553,8 +576,9 @@ async function speakText(text){
   const key = state.elevenLabsKey;
   const clean = text.replace(/[*_`#~>]/g, '').replace(/\n+/g, ' ').trim();
   if(!clean) return;
-  lipFallbackEndsAt = performance.now() + Math.max(1200, Math.min(12000, clean.length / 13 * 1000));
-  if(!key) return;
+  const fallbackMs = Math.max(1200, Math.min(12000, clean.length / 13 * 1000));
+  // No TTS key: drive the mouth procedurally for the estimated duration.
+  if(!key){ startLipFallback(fallbackMs); return; }
   if(voiceAudioUrl){
     URL.revokeObjectURL(voiceAudioUrl);
     voiceAudioUrl = '';
@@ -562,6 +586,8 @@ async function speakText(text){
   voiceAudio.pause();
   voiceAudio.removeAttribute('src');
   voiceAudio.load();
+  // Keep the mouth still during the request; the analyser takes over once audio plays.
+  lipFallbackEndsAt = 0;
   ensureVoiceAudioGraph();
   try{
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
@@ -573,12 +599,12 @@ async function speakText(text){
         voice_settings: { stability: 0.45, similarity_boost: 0.82, style: 0.25, use_speaker_boost: true }
       })
     });
-    if(!res.ok){ console.warn('ElevenLabs TTS error', res.status); return; }
+    if(!res.ok){ console.warn('ElevenLabs TTS error', res.status); startLipFallback(fallbackMs); return; }
     const blob = await res.blob();
     voiceAudioUrl = URL.createObjectURL(blob);
     voiceAudio.src = voiceAudioUrl;
-    voiceAudio.play().catch(() => {});
-  } catch(e){ console.warn('TTS fetch failed', e); }
+    voiceAudio.play().catch(() => startLipFallback(fallbackMs));
+  } catch(e){ console.warn('TTS fetch failed', e); startLipFallback(fallbackMs); }
 }
 
 // ─── CHAT ────────────────────────────────────────────────────────────────────
