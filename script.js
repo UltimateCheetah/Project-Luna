@@ -458,6 +458,7 @@ function onModelError(err){
   loadingVeil.querySelector('.ltext').textContent = 'failed to load · check URL & CORS';
   setTimeout(() => loadingVeil.classList.add('hidden'), 1400);
   pushSystemMsg("Couldn't load that model — make sure the URL is public and the host allows CORS.");
+  showToast("Couldn't load that model — check the URL is public and CORS-enabled.");
 }
 
 function focusCameraOnHead(model, box){
@@ -545,6 +546,22 @@ function detectAndPlayKeywordAnim(replyText){
   }
 }
 
+// ─── TOAST / ERROR POPUPS ────────────────────────────────────────────────────
+const toastHost = document.getElementById('toast-host');
+
+function showToast(message, type = 'error', duration = 6000){
+  if(!toastHost || !message) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<span class="toast-dot"></span><span class="toast-msg"></span><button class="toast-x" aria-label="Dismiss">✕</button>`;
+  el.querySelector('.toast-msg').textContent = message;
+  const remove = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+  el.querySelector('.toast-x').addEventListener('click', remove);
+  toastHost.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(remove, duration);
+}
+
 // ─── MOOD / REACTION SYSTEM ──────────────────────────────────────────────────
 function setMood(word){ moodWord.textContent = word; }
 
@@ -599,12 +616,27 @@ async function speakText(text){
         voice_settings: { stability: 0.45, similarity_boost: 0.82, style: 0.25, use_speaker_boost: true }
       })
     });
-    if(!res.ok){ console.warn('ElevenLabs TTS error', res.status); startLipFallback(fallbackMs); return; }
+    if(!res.ok){
+      const raw = await res.text().catch(() => '');
+      let detail = '';
+      try{ const j = JSON.parse(raw); detail = j?.detail?.message || (typeof j?.detail === 'string' ? j.detail : '') || j?.message || ''; } catch(e){}
+      console.warn('ElevenLabs TTS error', res.status, raw.slice(0, 200));
+      showToast(`Voice unavailable (${res.status})${detail ? ' — ' + detail.slice(0, 160) : ' — check your ElevenLabs key.'}`);
+      startLipFallback(fallbackMs);
+      return;
+    }
     const blob = await res.blob();
     voiceAudioUrl = URL.createObjectURL(blob);
     voiceAudio.src = voiceAudioUrl;
-    voiceAudio.play().catch(() => startLipFallback(fallbackMs));
-  } catch(e){ console.warn('TTS fetch failed', e); startLipFallback(fallbackMs); }
+    voiceAudio.play().catch(() => {
+      showToast('Browser blocked audio playback — tap the page, then try again.', 'warn');
+      startLipFallback(fallbackMs);
+    });
+  } catch(e){
+    console.warn('TTS fetch failed', e);
+    showToast('Voice request failed — check your connection.');
+    startLipFallback(fallbackMs);
+  }
 }
 
 // ─── CHAT ────────────────────────────────────────────────────────────────────
@@ -711,6 +743,7 @@ async function sendMessage(){
   } catch(err){
     console.error(err);
     pushSystemMsg('Connection failed: ' + (err.message || 'unknown error'));
+    showToast('Chat failed — ' + (err.message || 'unknown error'));
     setMood('dormant');
   } finally{
     state.isSending  = false;
