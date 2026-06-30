@@ -10,7 +10,7 @@ const ELEVENLABS_VOICE_ID     = '3TvwAYaI9aPzmchBRZA0';
 const DEFAULT_MODEL_ID        = 'openrouter/free';
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_MODEL_URL   = 'https://raw.githubusercontent.com/UltimateCheetah/Project-Luna/main/Luna_V2.vrm';
+const DEFAULT_MODEL_URL   = 'https://raw.githubusercontent.com/UltimateCheetah/Project-Luna/main/Luna_V3_Fluffy.vrm';
 const TARGET_MODEL_HEIGHT = 1.55;
 const STORAGE_KEY         = 'luna_ai_catgirl_v3';
 const HISTORY_KEY         = 'luna_ai_chat_history_v3';
@@ -100,6 +100,10 @@ let currentVrm    = null;
 let activeAction  = null;
 let idleClipName  = null;
 let _cachedClips  = [];
+let roomGroup     = null;
+let roomLights    = [];
+let uwuSignGroup  = null;
+let uwuGlowLight  = null;
 
 let idleTime = 0;
 let useProceduralIdle = false;
@@ -132,8 +136,8 @@ const moodWord     = document.getElementById('mood-word');
 
 function initScene(){
   scene  = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(35, window.innerWidth / Math.max(window.innerHeight, 1), 0.1, 100);
-  camera.position.set(0, 1.45, 2.0);
+  camera = new THREE.PerspectiveCamera(35, window.innerWidth / Math.max(window.innerHeight, 1), 0.1, 50);
+  camera.position.set(0, 1.55, 3.2);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -141,45 +145,31 @@ function initScene(){
   renderer.shadowMap.enabled = true;
   renderer.outputColorSpace  = THREE.SRGBColorSpace;
 
-  scene.add(new THREE.HemisphereLight(0xffc1ea, 0x140c1f, 0.7));
+  scene.add(new THREE.HemisphereLight(0xffc1ea, 0x140c1f, 0.4));
 
-  const key = new THREE.DirectionalLight(0xfff0f8, 1.4);
+  const key = new THREE.DirectionalLight(0xfff0f8, 1.0);
   key.position.set(2.5, 4, 3);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   scene.add(key);
 
-  const rim = new THREE.PointLight(0xff8fd4, 6, 12);
+  const rim = new THREE.PointLight(0xff8fd4, 4, 10);
   rim.position.set(-2.5, 1.5, -2);
   scene.add(rim);
 
-  const rim2 = new THREE.PointLight(0xb9a6ff, 2.6, 10);
+  const rim2 = new THREE.PointLight(0xb9a6ff, 1.8, 8);
   rim2.position.set(2, 0.5, -2.5);
   scene.add(rim2);
 
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(2.6, 64),
-    new THREE.MeshStandardMaterial({ color: 0x150e1c, metalness: 0.6, roughness: 0.35, emissive: 0x230f1d, emissiveIntensity: 0.4 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(2.55, 2.62, 64),
-    new THREE.MeshBasicMaterial({ color: 0xff8fd4, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.001;
-  scene.add(ring);
+  // Ground and ring removed — room floor handles this now
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 1.45, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.minDistance   = 0.6;
-  controls.maxDistance   = 4;
-  controls.maxPolarAngle = Math.PI * 0.6;
+  controls.maxDistance   = 6;
+  controls.maxPolarAngle = Math.PI * 0.65;
   controls.touches       = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   controls.update();
 
@@ -187,6 +177,810 @@ function initScene(){
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
   animate();
+}
+
+function createGamerRoom(){
+  roomGroup = new THREE.Group();
+  roomGroup.name = 'gamerRoom';
+  scene.add(roomGroup);
+
+  // ─── TEXTURE LOADER ─────────────────────────────────────────────────────
+  const texLoader = new THREE.TextureLoader();
+  // Use absolute paths relative to the HTML file
+  const catgirlTex   = texLoader.load('textures/catgirl-poster.png');
+  const controllerTex = texLoader.load('textures/controller-poster.png');
+  const heartTex     = texLoader.load('textures/heart-pixel.png');
+  const pawTex       = texLoader.load('textures/paw-print.png');
+  const synthTex     = texLoader.load('textures/synthwave-wall.jpg');
+  const nekoTex      = texLoader.load('textures/neko-neon.png');
+  // Configure all textures
+  [catgirlTex, controllerTex, heartTex, pawTex, synthTex, nekoTex].forEach(t => {
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.generateMipmaps = true;
+  });
+
+  // ─── SHARED MATERIALS ───────────────────────────────────────────────────
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x271a30, roughness: 0.5, metalness: 0.08
+  });
+  // Rich dark floor with slight reflection
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x150c18, roughness: 0.22, metalness: 0.6
+  });
+  // Signature hot pink — matte with soft glow
+  const pinkMat = new THREE.MeshStandardMaterial({
+    color: 0xff5ca0, roughness: 0.18, metalness: 0.25,
+    emissive: 0xff2d7a, emissiveIntensity: 0.35
+  });
+  // Soft pastel pink accent
+  const accentMat = new THREE.MeshStandardMaterial({
+    color: 0xff8fd4, roughness: 0.12, metalness: 0.3,
+    emissive: 0xff5cb8, emissiveIntensity: 0.5
+  });
+  // Near-black for contrast
+  const darkMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0612, roughness: 0.55, metalness: 0.15
+  });
+  // Monitor screen — glowing emissive
+  const screenMat = new THREE.MeshStandardMaterial({
+    color: 0x18082e, roughness: 0.05, metalness: 0.05,
+    emissive: 0xff8fd4, emissiveIntensity: 0.7
+  });
+  const screenGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xff8fd4, transparent: true, opacity: 0.2
+  });
+  // Dark purple-blue desk surface
+  const deskMat = new THREE.MeshStandardMaterial({
+    color: 0x2e1c3c, roughness: 0.2, metalness: 0.55
+  });
+  // Pure emissive LED
+  const ledPink = new THREE.MeshBasicMaterial({ color: 0xff8fd4 });
+  const ledLilac = new THREE.MeshBasicMaterial({ color: 0xc9a6ff });
+  const neonUwUMat = new THREE.MeshBasicMaterial({ color: 0xff69b4 });
+
+  // Door / trim materials
+  const creamMat = new THREE.MeshStandardMaterial({
+    color: 0xf5e6f0, roughness: 0.4, metalness: 0.05
+  });
+  const whiteGlossMat = new THREE.MeshStandardMaterial({
+    color: 0xfaf5fa, roughness: 0.15, metalness: 0.1
+  });
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xaac8e0, roughness: 0.05, metalness: 0.15,
+    transparent: true, opacity: 0.3
+  });
+  const skyOutsideMat = new THREE.MeshBasicMaterial({
+    color: 0x1a1040
+  });
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0xc4a0c8, roughness: 0.4, metalness: 0.05
+  });
+
+  // ─── FLOOR ──────────────────────────────────────────────────────────────
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 9), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, -0.01, 0.5);
+  floor.receiveShadow = true;
+  roomGroup.add(floor);
+
+  // ─── FLUFFY PINK CARPET ─────────────────────────────────────────────────
+  const carpetGroup = new THREE.Group();
+  const carpetMat = new THREE.MeshStandardMaterial({
+    color: 0xffb6c1, roughness: 0.95, metalness: 0.0
+  });
+  // Carpet main oval
+  const carpetBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.65, 1.72, 0.05, 48),
+    carpetMat
+  );
+  carpetBase.position.set(0, 0.02, 0.5);
+  carpetBase.receiveShadow = true;
+  carpetGroup.add(carpetBase);
+
+  // Fluffy texture — lots of tiny tufts on top
+  const fluffMat = new THREE.MeshStandardMaterial({
+    color: 0xffb6c1, roughness: 0.95, metalness: 0.0,
+    emissive: 0x1a1016, emissiveIntensity: 0.12
+  });
+  for(let i = 0; i < 160; i++){
+    const r = Math.sqrt(Math.random()) * 1.6;
+    const angle = Math.random() * Math.PI * 2;
+    const px = Math.cos(angle) * r;
+    const pz = 0.5 + Math.sin(angle) * r;
+    const h = 0.015 + Math.random() * 0.05;
+    const fluff = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.025 + Math.random() * 0.04, h, 3, 6),
+      fluffMat
+    );
+    fluff.position.set(px, 0.035 + h/2, pz);
+    fluff.rotation.x = (Math.random() - 0.5) * 0.5;
+    fluff.rotation.z = (Math.random() - 0.5) * 0.5;
+    carpetGroup.add(fluff);
+  }
+  // Edge tufts
+  for(let i = 0; i < 60; i++){
+    const angle = (i / 60) * Math.PI * 2;
+    const r = 1.62 + Math.random() * 0.12;
+    const px = Math.cos(angle) * r;
+    const pz = 0.5 + Math.sin(angle) * r;
+    const h = 0.025 + Math.random() * 0.06;
+    const tuft = new THREE.Mesh(
+      new THREE.ConeGeometry(0.025 + Math.random() * 0.03, h, 5),
+      fluffMat
+    );
+    tuft.position.set(px, 0.03 + h/2, pz);
+    tuft.rotation.x = (Math.random() - 0.5) * 0.4;
+    tuft.rotation.z = (Math.random() - 0.5) * 0.4;
+    carpetGroup.add(tuft);
+  }
+  // Subtle glow edge under carpet
+  const carpetGlow = new THREE.Mesh(
+    new THREE.RingGeometry(1.55, 1.8, 64),
+    new THREE.MeshBasicMaterial({ color: 0xffb6c1, side: THREE.DoubleSide, transparent: true, opacity: 0.18 })
+  );
+  carpetGlow.rotation.x = -Math.PI / 2;
+  carpetGlow.position.set(0, 0.005, 0.5);
+  carpetGroup.add(carpetGlow);
+  roomGroup.add(carpetGroup);
+
+  // Floor accent ring (pushed up above carpet level)
+  const floorGlow = new THREE.Mesh(
+    new THREE.RingGeometry(1.85, 1.9, 64),
+    new THREE.MeshBasicMaterial({ color: 0xff8fd4, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })
+  );
+  floorGlow.rotation.x = -Math.PI / 2;
+  floorGlow.position.set(0, 0.001, 0.5);
+  roomGroup.add(floorGlow);
+
+  // Subtle grid on floor (now sitting above carpet)
+  const gridHelper = new THREE.PolarGridHelper(4.2, 64, 36, 256, 0xff2d7a, 0xff2d7a);
+  gridHelper.position.y = 0.08;
+  roomGroup.add(gridHelper);
+
+  // ─── BACK WALL ──────────────────────────────────────────────────────────
+  // Base wall
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), wallMat);
+  backWall.position.set(0, 3, -4.0);
+  backWall.receiveShadow = true;
+  roomGroup.add(backWall);
+
+  // Synthwave texture overlay on back wall (slightly in front)
+  const synthWallPanel = new THREE.Mesh(
+    new THREE.PlaneGeometry(10, 5.2),
+    new THREE.MeshBasicMaterial({ map: synthTex, transparent: true, opacity: 0.35 })
+  );
+  synthWallPanel.position.set(0, 3.0, -3.96);
+  roomGroup.add(synthWallPanel);
+
+  // Accent stripe
+  const backStripe = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.06), accentMat);
+  backStripe.position.set(0, 2.15, -3.97);
+  roomGroup.add(backStripe);
+
+  // ─── LEFT WALL ──────────────────────────────────────────────────────────
+  const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), wallMat);
+  leftWall.position.set(-6, 3, 0.5);
+  leftWall.rotation.y = Math.PI / 2;
+  leftWall.receiveShadow = true;
+  roomGroup.add(leftWall);
+
+  // ─── RIGHT WALL ─────────────────────────────────────────────────────────
+  const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), wallMat);
+  rightWall.position.set(6, 3, 0.5);
+  rightWall.rotation.y = -Math.PI / 2;
+  rightWall.receiveShadow = true;
+  roomGroup.add(rightWall);
+
+  // ─── CEILING ────────────────────────────────────────────────────────────
+  const ceiling = new THREE.Mesh(
+    new THREE.PlaneGeometry(12, 9),
+    new THREE.MeshStandardMaterial({ color: 0x1a0e24, roughness: 0.55, metalness: 0.05 })
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, 6, 0.5);
+  roomGroup.add(ceiling);
+
+  // ─── LED STRIPS ─────────────────────────────────────────────────────────
+  function ledStrip(x, y, z, rotY, len, mat){
+    const s = new THREE.Mesh(new THREE.BoxGeometry(len, 0.03, 0.06), mat);
+    s.position.set(x, y, z);
+    s.rotation.y = rotY;
+    return s;
+  }
+  // Crown moulding — pink LEDs at wall-ceiling junctions
+  roomGroup.add(ledStrip(0, 5.98, -4.0, 0, 12, ledPink));
+  roomGroup.add(ledStrip(-5.98, 5.98, 0.5, Math.PI/2, 9, ledLilac));
+  roomGroup.add(ledStrip(5.98, 5.98, 0.5, -Math.PI/2, 9, ledLilac));
+  // Baseboard LEDs
+  roomGroup.add(ledStrip(0, 0.05, -4.0, 0, 12, ledPink));
+  roomGroup.add(ledStrip(-5.98, 0.05, 0.5, Math.PI/2, 9, ledLilac));
+  roomGroup.add(ledStrip(5.98, 0.05, 0.5, -Math.PI/2, 9, ledLilac));
+
+  // ─── WINDOWS (on side walls) ────────────────────────────────────────────
+  function makeWindow(wx, wy, wz, rotY){
+    const wg = new THREE.Group();
+    // Window hole / outer frame
+    const wFrame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.08), creamMat);
+    wFrame.position.y = 0.8;
+    wg.add(wFrame);
+    const wFrameB = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.08), creamMat);
+    wFrameB.position.y = -0.8;
+    wg.add(wFrameB);
+    const wFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), creamMat);
+    wFrameL.position.x = -0.56;
+    wg.add(wFrameL);
+    const wFrameR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), creamMat);
+    wFrameR.position.x = 0.56;
+    wg.add(wFrameR);
+    // Glass pane
+    const wGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 1.44), glassMat);
+    wGlass.position.z = 0.01;
+    wg.add(wGlass);
+    // Sky backdrop behind glass
+    const wSky = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.6), skyOutsideMat);
+    wSky.position.z = -0.04;
+    wg.add(wSky);
+    // Window sill
+    const wSill = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.04, 0.12), woodMat);
+    wSill.position.y = -0.84;
+    wSill.position.z = 0.05;
+    wg.add(wSill);
+    // Slight city-skyline silhouette
+    const cityBlock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 0.02), darkMat);
+    cityBlock.position.set(-0.3, -0.4, -0.03);
+    wg.add(cityBlock);
+    const cityBlock2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.02), darkMat);
+    cityBlock2.position.set(0.1, -0.45, -0.03);
+    wg.add(cityBlock2);
+    const cityBlock3 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.5, 0.02), darkMat);
+    cityBlock3.position.set(0.35, -0.35, -0.03);
+    wg.add(cityBlock3);
+    // Window glow
+    const wGlow = new THREE.PointLight(0xaac8e8, 2, 3, 1.5);
+    wGlow.position.z = 0.3;
+    wg.add(wGlow);
+    roomLights.push(wGlow);
+
+    wg.position.set(wx, wy, wz);
+    wg.rotation.y = rotY;
+    roomGroup.add(wg);
+    return wg;
+  }
+  // Left wall window
+  makeWindow(-5.97, 3.6, 2.2, Math.PI/2);
+  // Right wall window
+  makeWindow(5.97, 3.6, 2.2, -Math.PI/2);
+
+  // ─── DOOR (right wall, near front) ─────────────────────────────────────
+  const doorGroup = new THREE.Group();
+  // Door leaf
+  const doorLeaf = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.6, 0.06), creamMat);
+  doorLeaf.position.set(0.45, 1.3, 0);
+  doorGroup.add(doorLeaf);
+  // Door panels (inset detail)
+  const doorPanel1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.02), whiteGlossMat);
+  doorPanel1.position.set(0.45, 1.8, 0.04);
+  doorGroup.add(doorPanel1);
+  const doorPanel2 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 0.02), whiteGlossMat);
+  doorPanel2.position.set(0.45, 0.9, 0.04);
+  doorGroup.add(doorPanel2);
+  // Door handle
+  const doorHandle = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), accentMat);
+  doorHandle.position.set(0.7, 1.3, 0.06);
+  doorGroup.add(doorHandle);
+  // Door frame
+  const doorFrameTop = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 0.08), woodMat);
+  doorFrameTop.position.set(0.45, 2.62, 0);
+  doorGroup.add(doorFrameTop);
+  const doorFrameL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.68, 0.08), woodMat);
+  doorFrameL.position.set(0, 1.34, 0);
+  doorGroup.add(doorFrameL);
+  const doorFrameR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 2.68, 0.08), woodMat);
+  doorFrameR.position.set(0.9, 1.34, 0);
+  doorGroup.add(doorFrameR);
+  // Position on right wall
+  doorGroup.position.set(5.97, 0, 2.8);
+  doorGroup.rotation.y = -Math.PI / 2;
+  roomGroup.add(doorGroup);
+
+  // ─── UWU NEON SIGN (on back wall, above the desk) ──────────────────────
+  uwuSignGroup = new THREE.Group();
+  // Create UwU lettering from box segments (pixel-style neon letters)
+  function makeNeonLetter(letter, x, y){
+    const g = new THREE.Group();
+    const seg = (sx, sy, sw, sh) => {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, 0.04), neonUwUMat);
+      box.position.set(sx, sy, 0);
+      g.add(box);
+    };
+    if(letter === 'U'){
+      seg(-0.2, 0.3, 0.05, 0.6);   // left vertical
+      seg(0.2, 0.3, 0.05, 0.6);    // right vertical
+      seg(0, 0, 0.3, 0.05);        // bottom horizontal
+    } else if(letter === 'w'){
+      seg(-0.2, 0.3, 0.05, 0.6);   // left vertical
+      seg(0, 0.15, 0.05, 0.3);     // center vertical
+      seg(0.2, 0.3, 0.05, 0.6);    // right vertical
+      seg(-0.1, 0.1, 0.2, 0.05);   // left diagonal-ish (center to left)
+      seg(0.1, 0.1, 0.2, 0.05);    // right diagonal-ish (center to right)
+    }
+    g.position.set(x, y, 0);
+    return g;
+  }
+  // "U" - left
+  const letterU1 = makeNeonLetter('U', -0.48, 0);
+  uwuSignGroup.add(letterU1);
+  // "w" - center
+  const letterW = makeNeonLetter('w', 0, 0);
+  uwuSignGroup.add(letterW);
+  // "U" - right
+  const letterU2 = makeNeonLetter('U', 0.48, 0);
+  uwuSignGroup.add(letterU2);
+  
+  // Neon glow plane behind sign
+  const neonGlowPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.0, 0.9),
+    new THREE.MeshBasicMaterial({ color: 0xff69b4, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+  );
+  neonGlowPlane.position.z = -0.06;
+  uwuSignGroup.add(neonGlowPlane);
+  // Extra intense glow
+  const neonGlowBig = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.6, 1.3),
+    new THREE.MeshBasicMaterial({ color: 0xff69b4, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
+  );
+  neonGlowBig.position.z = -0.08;
+  uwuSignGroup.add(neonGlowBig);
+  
+  // Heart accent below
+  const heartShape = new THREE.Shape();
+  heartShape.moveTo(0, 0.15);
+  heartShape.bezierCurveTo(0, 0.28, -0.2, 0.28, -0.2, 0.15);
+  heartShape.bezierCurveTo(-0.2, 0, 0, -0.25, 0, -0.4);
+  heartShape.bezierCurveTo(0, -0.25, 0.2, 0, 0.2, 0.15);
+  heartShape.bezierCurveTo(0.2, 0.28, 0, 0.28, 0, 0.15);
+  const heartGeom = new THREE.ShapeGeometry(heartShape);
+  const heartMesh = new THREE.Mesh(heartGeom, neonUwUMat);
+  heartMesh.position.set(0, -0.6, 0);
+  heartMesh.scale.set(1.2, 1.2, 1);
+  uwuSignGroup.add(heartMesh);
+  
+  // Position on back wall, above/behind the monitor setup
+  uwuSignGroup.position.set(0, 4.2, -3.94);
+  roomGroup.add(uwuSignGroup);
+  
+  // Point light for neon glow on nearby walls
+  uwuGlowLight = new THREE.PointLight(0xff69b4, 6, 4, 2);
+  uwuGlowLight.position.set(0, 4.2, -3.6);
+  roomGroup.add(uwuGlowLight);
+  roomLights.push(uwuGlowLight);
+
+  // ─── GAMING DESK ────────────────────────────────────────────────────────
+  const deskGroup = new THREE.Group();
+  deskGroup.position.set(0, 0, -2.85);
+
+  // Desktop
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.07, 1.3), deskMat);
+  deskTop.position.y = 0.92;
+  deskTop.castShadow = true;
+  deskTop.receiveShadow = true;
+  deskGroup.add(deskTop);
+
+  // Legs (slightly inset, tapered look via smaller bottom)
+  const legPositions = [[-1.15, -0.45], [-0.38, -0.45], [0.38, -0.45], [1.15, -0.45], [-1.15, 0.45], [1.15, 0.45]];
+  legPositions.forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.92, 8), darkMat);
+    leg.position.set(lx, 0.46, lz);
+    leg.castShadow = true;
+    deskGroup.add(leg);
+  });
+
+  // Desk edge glow strip
+  const deskEdge = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.04, 0.05), ledPink);
+  deskEdge.position.set(0, 0.87, 0.67);
+  deskGroup.add(deskEdge);
+
+  roomGroup.add(deskGroup);
+
+  // ─── MONITOR ────────────────────────────────────────────────────────────
+  const monitorGroup = new THREE.Group();
+  monitorGroup.position.set(0, 1.75, -3.15);
+
+  // Screen panel
+  const screenPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.88), screenMat);
+  monitorGroup.add(screenPanel);
+
+  // Screen glow (slightly larger, behind screen for bloom effect)
+  const glowPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.58, 0.95), screenGlowMat);
+  glowPanel.position.z = -0.015;
+  monitorGroup.add(glowPanel);
+
+  // Bezel frame
+  const bezelOuter = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.04, 0.05), darkMat);
+  bezelOuter.position.z = -0.035;
+  monitorGroup.add(bezelOuter);
+
+  // Monitor back housing
+  const monitorBack = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.95, 0.12), darkMat);
+  monitorBack.position.z = -0.1;
+  monitorGroup.add(monitorBack);
+
+  // Stand neck
+  const standNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 16), deskMat);
+  standNeck.position.set(0, -0.65, 0);
+  monitorGroup.add(standNeck);
+
+  // Stand base
+  const standBase = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.05, 32), pinkMat);
+  standBase.position.set(0, -0.92, 0);
+  monitorGroup.add(standBase);
+
+  // Stand base ring
+  const standRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.24, 0.02, 8, 32),
+    ledPink
+  );
+  standRing.rotation.x = Math.PI / 2;
+  standRing.position.set(0, -0.89, 0);
+  monitorGroup.add(standRing);
+
+  roomGroup.add(monitorGroup);
+
+  // Second smaller monitor (portrait / side setup)
+  const monitor2Group = new THREE.Group();
+  monitor2Group.position.set(-1.1, 1.55, -3.08);
+  const screen2 = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.82), screenMat);
+  monitor2Group.add(screen2);
+  const bezel2 = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.92, 0.04), darkMat);
+  bezel2.position.z = -0.03;
+  monitor2Group.add(bezel2);
+  const mon2Glow = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.9), screenGlowMat);
+  mon2Glow.position.z = -0.02;
+  monitor2Group.add(mon2Glow);
+  const stand2Neck = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.3, 8), deskMat);
+  stand2Neck.position.set(0, -0.44, 0);
+  monitor2Group.add(stand2Neck);
+  const stand2Base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.03, 16), pinkMat);
+  stand2Base.position.set(0, -0.6, 0);
+  monitor2Group.add(stand2Base);
+  roomGroup.add(monitor2Group);
+
+  // Small desk plant (between monitors)
+  const deskPlantPot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 8), creamMat);
+  deskPlantPot.position.set(-0.55, 1.05, -3.0);
+  roomGroup.add(deskPlantPot);
+  const deskPlantLeaf = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), new THREE.MeshStandardMaterial({ color: 0x7fd8a0, roughness: 0.5 }));
+  deskPlantLeaf.position.set(-0.55, 1.14, -3.0);
+  deskPlantLeaf.scale.set(1, 0.7, 1);
+  roomGroup.add(deskPlantLeaf);
+
+  // ─── CAT EARS ON MONITOR ────────────────────────────────────────────────
+  function makeEar(x, lean){
+    const g = new THREE.Group();
+    const outer = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 8), pinkMat);
+    outer.position.y = 0.11;
+    g.add(outer);
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.14, 8), accentMat);
+    inner.position.y = 0.13;
+    g.add(inner);
+    g.position.set(x, 2.24, -3.1);
+    g.rotation.z = lean;
+    return g;
+  }
+  roomGroup.add(makeEar(-0.28, 0.35));
+  roomGroup.add(makeEar(0.28, -0.35));
+
+  // ─── KEYBOARD ───────────────────────────────────────────────────────────
+  const kbGroup = new THREE.Group();
+  kbGroup.position.set(0, 0.97, -2.55);
+  kbGroup.rotation.x = -0.06;
+  const kbBase = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.025, 0.32), pinkMat);
+  kbGroup.add(kbBase);
+  // Key rows
+  for(let r = 0; r < 5; r++){
+    const row = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.008, 0.04), accentMat);
+    row.position.set(0, 0.02 + r * 0.01, -0.12 + r * 0.05);
+    kbGroup.add(row);
+  }
+  roomGroup.add(kbGroup);
+
+  // ─── MOUSE + MOUSEPAD ───────────────────────────────────────────────────
+  const mousepad = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.4), accentMat);
+  mousepad.rotation.x = -Math.PI / 2;
+  mousepad.position.set(0.6, 0.955, -2.45);
+  roomGroup.add(mousepad);
+
+  const mouseGeo = new THREE.SphereGeometry(0.05, 16, 8, 0, Math.PI*2, 0, Math.PI/2);
+  const mouseMesh = new THREE.Mesh(mouseGeo, pinkMat);
+  mouseMesh.scale.set(1, 0.55, 1.25);
+  mouseMesh.position.set(0.6, 0.975, -2.5);
+  roomGroup.add(mouseMesh);
+
+  // ─── GAMING CHAIR ───────────────────────────────────────────────────────
+  const chairGroup = new THREE.Group();
+  chairGroup.position.set(0, 0.4, -1.6);
+
+  // Seat cushion
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.6), pinkMat);
+  seat.position.y = 0.05;
+  seat.castShadow = true;
+  chairGroup.add(seat);
+
+  // Seat front curve
+  const seatFront = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.65, 8), accentMat);
+  seatFront.rotation.x = Math.PI / 2;
+  seatFront.position.set(0, 0.02, 0.3);
+  chairGroup.add(seatFront);
+
+  // Backrest
+  const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.09), accentMat);
+  backrest.position.set(0, 0.5, -0.28);
+  backrest.rotation.x = -0.08;
+  backrest.castShadow = true;
+  chairGroup.add(backrest);
+
+  // Backrest side wings
+  const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), pinkMat);
+  wingL.position.set(-0.31, 0.5, -0.26);
+  wingL.rotation.z = 0.15;
+  chairGroup.add(wingL);
+  const wingR = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.6, 0.07), pinkMat);
+  wingR.position.set(0.31, 0.5, -0.26);
+  wingR.rotation.z = -0.15;
+  chairGroup.add(wingR);
+
+  // Armrests
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.42), deskMat);
+  armL.position.set(-0.36, 0.14, -0.05);
+  chairGroup.add(armL);
+  const armR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.42), deskMat);
+  armR.position.set(0.36, 0.14, -0.05);
+  chairGroup.add(armR);
+
+  // Gas lift
+  const lift = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.28, 16), darkMat);
+  lift.position.y = -0.2;
+  chairGroup.add(lift);
+
+  // Base — 5 spokes with wheels
+  for(let i = 0; i < 5; i++){
+    const a = (i/5) * Math.PI * 2;
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.3), deskMat);
+    spoke.position.set(Math.sin(a)*0.14, -0.34, Math.cos(a)*0.14);
+    spoke.rotation.y = -a;
+    chairGroup.add(spoke);
+    // Caster wheel
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 8), darkMat);
+    wheel.rotation.x = Math.PI/2;
+    wheel.position.set(Math.sin(a)*0.28, -0.35, Math.cos(a)*0.28);
+    chairGroup.add(wheel);
+  }
+
+  roomGroup.add(chairGroup);
+
+  // ─── LEFT WALL: CATGIRL NEON POSTER ─────────────────────────────────────
+  const leftPoster = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.0, 2.8),
+    new THREE.MeshBasicMaterial({ map: catgirlTex })
+  );
+  leftPoster.position.set(-5.97, 2.8, -0.3);
+  leftPoster.rotation.y = Math.PI / 2;
+  roomGroup.add(leftPoster);
+
+  // Pink neon frame around poster
+  const lFrame = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.9, 2.1), ledPink);
+  lFrame.position.set(-5.99, 2.8, -0.3);
+  lFrame.rotation.y = Math.PI / 2;
+  roomGroup.add(lFrame);
+
+  // Second smaller poster — neko neon
+  const leftPoster2 = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 1.6),
+    new THREE.MeshBasicMaterial({ map: nekoTex })
+  );
+  leftPoster2.position.set(-5.97, 1.1, 2.5);
+  leftPoster2.rotation.y = Math.PI / 2;
+  roomGroup.add(leftPoster2);
+
+  const lFrame2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.7, 1.7), ledLilac);
+  lFrame2.position.set(-5.99, 1.1, 2.5);
+  lFrame2.rotation.y = Math.PI / 2;
+  roomGroup.add(lFrame2);
+
+  // ─── RIGHT WALL: CONTROLLER NEON POSTER ──────────────────────────────────
+  const rightPoster = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.0, 2.0),
+    new THREE.MeshBasicMaterial({ map: controllerTex })
+  );
+  rightPoster.position.set(5.97, 2.8, -0.2);
+  rightPoster.rotation.y = -Math.PI / 2;
+  roomGroup.add(rightPoster);
+
+  const rFrame = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.1, 2.1), ledPink);
+  rFrame.position.set(5.99, 2.8, -0.2);
+  rFrame.rotation.y = -Math.PI / 2;
+  roomGroup.add(rFrame);
+
+  // ─── BACK WALL: PIXEL HEART POSTER ───────────────────────────────────────
+  const heartPoster = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9, 0.9),
+    new THREE.MeshBasicMaterial({ map: heartTex })
+  );
+  heartPoster.position.set(2.8, 3.8, -3.96);
+  roomGroup.add(heartPoster);
+
+  // Neon frame
+  const hFrame = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.02), ledPink);
+  hFrame.position.set(2.8, 4.28, -3.95);
+  roomGroup.add(hFrame);
+  const hFrame2 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.02), ledPink);
+  hFrame2.position.set(2.8, 3.32, -3.95);
+  roomGroup.add(hFrame2);
+
+  // ─── BACK WALL: PAW PRINT POSTER ─────────────────────────────────────────
+  const pawPoster = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9, 0.9),
+    new THREE.MeshBasicMaterial({ map: pawTex })
+  );
+  pawPoster.position.set(-2.5, 3.8, -3.96);
+  roomGroup.add(pawPoster);
+
+  const pFrame = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.02), ledLilac);
+  pFrame.position.set(-2.5, 4.28, -3.95);
+  roomGroup.add(pFrame);
+  const pFrame2 = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.02), ledLilac);
+  pFrame2.position.set(-2.5, 3.32, -3.95);
+  roomGroup.add(pFrame2);
+
+  // ─── FLOATING SHELF (right side) ────────────────────────────────────────
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.35), deskMat);
+  shelf.position.set(3.5, 2.6, -2.3);
+  shelf.castShadow = true;
+  shelf.receiveShadow = true;
+  roomGroup.add(shelf);
+
+  // Shelf brackets
+  const brackL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), pinkMat);
+  brackL.position.set(2.65, 2.49, -2.3);
+  roomGroup.add(brackL);
+  const brackR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), pinkMat);
+  brackR.position.set(4.35, 2.49, -2.3);
+  roomGroup.add(brackR);
+
+  // Energy drink can
+  const can = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 16), pinkMat);
+  can.position.set(3.15, 2.75, -2.25);
+  roomGroup.add(can);
+  const canTop = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.01, 16), accentMat);
+  canTop.position.set(3.15, 2.85, -2.25);
+  roomGroup.add(canTop);
+
+  // Small game controller on shelf
+  const miniPad = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.26), accentMat);
+  miniPad.position.set(3.9, 2.65, -2.35);
+  miniPad.rotation.x = -0.35;
+  roomGroup.add(miniPad);
+
+  // ─── PLUSHIE (cat plush on shelf) ──────────────────────────────────────
+  const plushGroup = new THREE.Group();
+  // Body
+  const plushBody = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), pinkMat);
+  plushBody.scale.set(1, 0.85, 0.8);
+  plushGroup.add(plushBody);
+  // Head
+  const plushHead = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), accentMat);
+  plushHead.position.set(0, 0.11, 0.05);
+  plushGroup.add(plushHead);
+  // Ears
+  const plushEarL = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.07, 6), pinkMat);
+  plushEarL.position.set(-0.05, 0.17, 0.03);
+  plushEarL.rotation.z = 0.3;
+  plushGroup.add(plushEarL);
+  const plushEarR = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.07, 6), pinkMat);
+  plushEarR.position.set(0.05, 0.17, 0.03);
+  plushEarR.rotation.z = -0.3;
+  plushGroup.add(plushEarR);
+  // Eyes
+  const plushEyeL = new THREE.Mesh(new THREE.SphereGeometry(0.012, 4, 4), darkMat);
+  plushEyeL.position.set(-0.025, 0.13, 0.1);
+  plushGroup.add(plushEyeL);
+  const plushEyeR = new THREE.Mesh(new THREE.SphereGeometry(0.012, 4, 4), darkMat);
+  plushEyeR.position.set(0.025, 0.13, 0.1);
+  plushGroup.add(plushEyeR);
+  plushGroup.position.set(3.5, 2.67, -2.1);
+  roomGroup.add(plushGroup);
+
+  // ─── SECOND SHELF (left wall, decor) ───────────────────────────────────
+  const shelf2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.04, 0.3), deskMat);
+  shelf2.position.set(-3.5, 2.2, -2.5);
+  shelf2.castShadow = true;
+  shelf2.receiveShadow = true;
+  roomGroup.add(shelf2);
+
+  const brack2L = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.03), pinkMat);
+  brack2L.position.set(-4.15, 2.11, -2.5);
+  roomGroup.add(brack2L);
+  const brack2R = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.03), pinkMat);
+  brack2R.position.set(-2.85, 2.11, -2.5);
+  roomGroup.add(brack2R);
+
+  // Small plant on second shelf
+  const plant2Pot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 8), creamMat);
+  plant2Pot.position.set(-3.2, 2.28, -2.45);
+  roomGroup.add(plant2Pot);
+  const plant2Leaf = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), new THREE.MeshStandardMaterial({ color: 0x7fd8a0, roughness: 0.5 }));
+  plant2Leaf.position.set(-3.2, 2.36, -2.45);
+  plant2Leaf.scale.set(1, 0.7, 1);
+  roomGroup.add(plant2Leaf);
+
+  // Small cat paw figurine
+  const miniPaw = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), accentMat);
+  miniPaw.scale.set(1, 0.5, 1);
+  miniPaw.position.set(-3.8, 2.27, -2.4);
+  roomGroup.add(miniPaw);
+
+  // ─── LIGHTING ───────────────────────────────────────────────────────────
+  roomLights = [];
+
+  // Main ambient
+  const ambient = new THREE.PointLight(0xff6ba8, 6, 12, 1.5);
+  ambient.position.set(0, 3.5, -2);
+  roomGroup.add(ambient);
+  roomLights.push(ambient);
+
+  // Monitor glow
+  const monGlow = new THREE.PointLight(0xff8fd4, 10, 5, 2);
+  monGlow.position.set(0, 1.75, -3.3);
+  roomGroup.add(monGlow);
+  roomLights.push(monGlow);
+
+  // Second monitor glow
+  const mon2GlowLight = new THREE.PointLight(0xff8fd4, 4, 3, 2);
+  mon2GlowLight.position.set(-1.1, 1.55, -3.0);
+  roomGroup.add(mon2GlowLight);
+  roomLights.push(mon2GlowLight);
+
+  // Desk underglow
+  const deskGlow = new THREE.PointLight(0xff2d7a, 4, 2.5, 2);
+  deskGlow.position.set(0, 0.4, -2.3);
+  roomGroup.add(deskGlow);
+  roomLights.push(deskGlow);
+
+  // Ceiling pink
+  const ceilLight = new THREE.PointLight(0xc9a6ff, 3, 7, 2);
+  ceilLight.position.set(0, 5.5, 0.5);
+  roomGroup.add(ceilLight);
+  roomLights.push(ceilLight);
+
+  // Right wall wash
+  const rightWash = new THREE.PointLight(0xff8fd4, 3, 4, 2);
+  rightWash.position.set(5, 2.5, 1.5);
+  roomGroup.add(rightWash);
+  roomLights.push(rightWash);
+
+  // Left wall wash
+  const leftWash = new THREE.PointLight(0xb9a6ff, 2.5, 4, 2);
+  leftWash.position.set(-5, 2.5, -1);
+  roomGroup.add(leftWash);
+  roomLights.push(leftWash);
+
+  // Carpet center glow
+  const carpetGlowLight = new THREE.PointLight(0xffb6c1, 3, 3, 2);
+  carpetGlowLight.position.set(0, 0.3, 0.5);
+  roomGroup.add(carpetGlowLight);
+  roomLights.push(carpetGlowLight);
+
+  console.log('🐱💖 Pink cat gamer room v3 built!');
+}
+
+function updateRoomPosition(){
+  // Room is static — anchored at origin where Luna lives.
+  // No parallax, so Luna stays perfectly centered as you orbit.
+  if(roomGroup){
+    roomGroup.position.set(0, 0, 0);
+  }
 }
 
 function onResize(){
@@ -376,6 +1170,7 @@ function animate(){
   }
 
   if(controls) controls.update();
+  updateRoomPosition();
   renderer.render(scene, camera);
 }
 
@@ -591,7 +1386,8 @@ function reactToReply(replyText){
 // ─── TEXT-TO-SPEECH (ElevenLabs) ─────────────────────────────────────────────
 async function speakText(text){
   const key = state.elevenLabsKey;
-  const clean = text.replace(/[*_`#~>]/g, '').replace(/\n+/g, ' ').trim();
+  const clean = text.replace(/[*_`#~>]/g, '').replace(/
++/g, ' ').trim();
   if(!clean) return;
   const fallbackMs = Math.max(1200, Math.min(12000, clean.length / 13 * 1000));
   // No TTS key: drive the mouth procedurally for the estimated duration.
@@ -875,7 +1671,7 @@ fullChatComposer.addEventListener('click', () => {
   msgInput.focus();
 });
 
-// ─── SETTINGS / ABOUT / FIRST-RUN KEY ────────────────────────────────────────
+// ─── SETTINGS / ABOUT / FIRST-RUN KEY ───────────────────────────────────────────────────
 const settingsVeil   = document.getElementById('settings-veil');
 const aboutVeil      = document.getElementById('about-veil');
 const keyVeil        = document.getElementById('key-veil');
@@ -883,7 +1679,7 @@ const personaGrid    = document.getElementById('persona-grid');
 const userNameInput  = document.getElementById('user-name');
 const userAboutInput = document.getElementById('user-about');
 const userNotesInput = document.getElementById('user-notes');
-const orKeyInput     = document.getElementById('gemini-key');       // reused input field
+const orKeyInput     = document.getElementById('gemini-key');
 const elKeyInput     = document.getElementById('elevenlabs-key');
 const modelUrlInput  = document.getElementById('model-url-input');
 const statusPill     = document.getElementById('status-pill');
@@ -896,9 +1692,8 @@ const keyCardInput   = document.getElementById('key-card-input');
   if(label) label.textContent = 'OpenRouter API key';
   const note = orKeyInput?.closest('.field')?.querySelector('.note');
   if(note) note.innerHTML = 'Free at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>. Default model: <code>' + DEFAULT_MODEL_ID + '</code>.';
-  // Also update the key card prompt text
   const keyCardP = document.querySelector('#key-card p');
-  if(keyCardP) keyCardP.textContent = 'Before I can wake up properly I need an OpenRouter key to think with — it\'s free and takes like 30 seconds to grab.';
+  if(keyCardP) keyCardP.textContent = 'Before I can wake up properly I need an OpenRouter key to think with \u2014 it\'s free and takes like 30 seconds to grab.';
   const keyCardNote = document.querySelector('#key-card .note');
   if(keyCardNote) keyCardNote.innerHTML = 'Get a free key at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.';
   const keyCardInput2 = document.getElementById('key-card-input');
@@ -980,7 +1775,7 @@ document.getElementById('save-about-btn').addEventListener('click', () => {
 
 document.getElementById('clear-chat-btn').addEventListener('click', () => {
   clearHistory();
-  pushSystemMsg("Chat cleared — starting fresh.");
+  pushSystemMsg("Chat cleared \u2014 starting fresh.");
 });
 
 document.getElementById('clear-all-btn').addEventListener('click', () => {
@@ -1007,7 +1802,6 @@ function submitKeyCard(){
 }
 
 // ─── MIGRATE OLD STORAGE ─────────────────────────────────────────────────────
-// If user has v2 save data (Gemini key), carry over non-key fields and drop the old key.
 function migrateOldStorage(){
   const OLD_KEY = 'luna_ai_catgirl_v2';
   const old = localStorage.getItem(OLD_KEY);
@@ -1025,7 +1819,7 @@ function migrateOldStorage(){
   } catch(e){ return null; }
 }
 
-// ─── BOOT ────────────────────────────────────────────────────────────────────
+// ─── BOOT ───────────────────────────────────────────────────────────────────────
 (function restore(){
   buildPersonaGrid();
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -1049,7 +1843,6 @@ function migrateOldStorage(){
       buildPersonaGrid();
     } catch(e){ console.warn('Could not restore saved data', e); }
   } else {
-    // No v3 data — check for v2 migration
     const migrated = migrateOldStorage();
     if(migrated){
       state.elevenLabsKey = migrated.elevenLabsKey || DEFAULT_ELEVENLABS_KEY;
@@ -1064,7 +1857,6 @@ function migrateOldStorage(){
       elKeyInput.value     = state.elevenLabsKey;
       modelUrlInput.value  = state.modelUrl;
       buildPersonaGrid();
-      // Don't migrate old Gemini key — user will need to enter OpenRouter key
     } else {
       state.elevenLabsKey = DEFAULT_ELEVENLABS_KEY;
     }
@@ -1075,6 +1867,7 @@ function migrateOldStorage(){
 })();
 
 initScene();
+createGamerRoom();
 loadCharacter(state.modelUrl || DEFAULT_MODEL_URL);
 modelUrlInput.value = state.modelUrl || '';
 
