@@ -103,6 +103,25 @@ let _cachedClips  = [];
 
 let idleTime = 0;
 let useProceduralIdle = false;
+let blinkCountdown = 2 + Math.random() * 4;
+let blinkProgress = 0;
+let blinkDouble = false;
+let lipLevel = 0;
+let lipFallbackEndsAt = 0;
+let voiceAudioCtx = null;
+let voiceAudioSource = null;
+let voiceAudioAnalyser = null;
+let voiceAudioData = null;
+let voiceAudioUrl = '';
+const voiceAudio = new Audio();
+
+voiceAudio.addEventListener('ended', () => {
+  if(voiceAudioUrl){
+    URL.revokeObjectURL(voiceAudioUrl);
+    voiceAudioUrl = '';
+  }
+  lipFallbackEndsAt = 0;
+});
 
 const canvas       = document.getElementById('canvas-3d');
 const loadingVeil  = document.getElementById('loading-veil');
@@ -235,11 +254,99 @@ function tickProceduralIdle(dt){
   currentVrm.update(dt);
 }
 
+function tickBlink(dt){
+  const em = currentVrm?.expressionManager;
+  if(!em) return;
+
+  if(blinkProgress > 0){
+    blinkProgress += dt;
+    const dur = blinkDouble ? 0.11 : 0.15;
+    const t = Math.min(1, blinkProgress / dur);
+    em.setValue('blink', Math.sin(t * Math.PI));
+    if(blinkProgress >= dur){
+      blinkProgress = 0;
+      blinkDouble = !blinkDouble && Math.random() < 0.16;
+      blinkCountdown = blinkDouble ? 0.12 : 2 + Math.random() * 4;
+      if(!blinkDouble) em.setValue('blink', 0);
+    }
+    return;
+  }
+
+  blinkCountdown -= dt;
+  if(blinkCountdown <= 0){
+    blinkProgress = 0.00001;
+    em.setValue('blink', 0);
+  } else {
+    em.setValue('blink', 0);
+  }
+}
+
+function ensureVoiceAudioGraph(){
+  if(voiceAudioAnalyser) return;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if(!Ctor) return;
+  try{
+    voiceAudioCtx = voiceAudioCtx || new Ctor();
+    if(!voiceAudioSource){
+      voiceAudioSource = voiceAudioCtx.createMediaElementSource(voiceAudio);
+      voiceAudioAnalyser = voiceAudioCtx.createAnalyser();
+      voiceAudioAnalyser.fftSize = 1024;
+      voiceAudioAnalyser.smoothingTimeConstant = 0.6;
+      voiceAudioData = new Uint8Array(voiceAudioAnalyser.frequencyBinCount);
+      voiceAudioSource.connect(voiceAudioAnalyser);
+      voiceAudioAnalyser.connect(voiceAudioCtx.destination);
+    }
+    if(voiceAudioCtx.state === 'suspended') voiceAudioCtx.resume().catch(() => {});
+  } catch(e){
+    console.warn('Audio graph setup failed', e);
+    voiceAudioCtx = null;
+    voiceAudioSource = null;
+    voiceAudioAnalyser = null;
+    voiceAudioData = null;
+  }
+}
+
+function tickLipSync(dt){
+  const em = currentVrm?.expressionManager;
+  if(!em) return;
+
+  let target = 0;
+  if(voiceAudioAnalyser && !voiceAudio.paused){
+    try{
+      voiceAudioAnalyser.getByteFrequencyData(voiceAudioData);
+      let sum = 0;
+      let count = 0;
+      const end = Math.min(41, voiceAudioData.length);
+      for(let i = 2; i < end; i++){
+        sum += voiceAudioData[i];
+        count++;
+      }
+      const avg = count ? sum / count : 0;
+      target = Math.max(0, Math.min(1, (avg - 18) / 72));
+    } catch(e){
+      target = 0;
+    }
+  } else if(performance.now() < lipFallbackEndsAt){
+    const t = performance.now() * 0.001;
+    target = Math.max(0, Math.min(1, Math.sin(t * 13.5) * 0.35 + Math.sin(t * 22.7 + 1.4) * 0.2 + 0.45));
+  }
+
+  lipLevel += (target - lipLevel) * Math.min(1, dt * 18);
+  em.setValue('aa', lipLevel * 0.9);
+  em.setValue('ih', lipLevel * 0.15);
+  em.setValue('ou', lipLevel * 0.1);
+}
+
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
 
   if(mixer) mixer.update(dt);
+
+  if(currentVrm){
+    tickBlink(dt);
+    tickLipSync(dt);
+  }
 
   if(useProceduralIdle){
     tickProceduralIdle(dt);
@@ -312,6 +419,12 @@ function onModelLoad(gltf){
     idleTime = 0;
     useProceduralIdle = true;
   }
+
+  blinkCountdown = 2 + Math.random() * 4;
+  blinkProgress = 0;
+  blinkDouble = false;
+  lipLevel = 0;
+  lipFallbackEndsAt = 0;
 
   loadingVeil.classList.add('hidden');
   setMood('curious');
@@ -436,13 +549,20 @@ function reactToReply(replyText){
 }
 
 // ─── TEXT-TO-SPEECH (ElevenLabs) ─────────────────────────────────────────────
-let currentAudio = null;
-
 async function speakText(text){
   const key = state.elevenLabsKey;
-  if(!key || !text) return;
-  if(currentAudio){ currentAudio.pause(); currentAudio = null; }
   const clean = text.replace(/[*_`#~>]/g, '').replace(/\n+/g, ' ').trim();
+  if(!clean) return;
+  lipFallbackEndsAt = performance.now() + Math.max(1200, Math.min(12000, clean.length / 13 * 1000));
+  if(!key) return;
+  if(voiceAudioUrl){
+    URL.revokeObjectURL(voiceAudioUrl);
+    voiceAudioUrl = '';
+  }
+  voiceAudio.pause();
+  voiceAudio.removeAttribute('src');
+  voiceAudio.load();
+  ensureVoiceAudioGraph();
   try{
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`, {
       method: 'POST',
@@ -455,10 +575,9 @@ async function speakText(text){
     });
     if(!res.ok){ console.warn('ElevenLabs TTS error', res.status); return; }
     const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    currentAudio = new Audio(url);
-    currentAudio.play();
-    currentAudio.addEventListener('ended', () => { URL.revokeObjectURL(url); currentAudio = null; });
+    voiceAudioUrl = URL.createObjectURL(blob);
+    voiceAudio.src = voiceAudioUrl;
+    voiceAudio.play().catch(() => {});
   } catch(e){ console.warn('TTS fetch failed', e); }
 }
 
@@ -545,6 +664,7 @@ async function sendMessage(){
 
   state.isSending  = true;
   sendBtn.disabled = true;
+  ensureVoiceAudioGraph();
 
   setTimeout(() => {
     reactWhileThinking();
