@@ -59,19 +59,63 @@ const PERSONAS = [
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const state = {
-  openRouterKey:  '',
-  elevenLabsKey:  '',
-  modelId:        DEFAULT_MODEL_ID,
-  personaId:      'sweet',
-  userName:       '',
-  userAbout:      '',
-  userNotes:      '',
-  history:        [],
-  isSending:      false,
-  modelUrl:       ''
+  openRouterKey:   '',
+  elevenLabsKey:   '',
+  modelId:         DEFAULT_MODEL_ID,
+  personaId:       'sweet',
+  userName:        '',
+  userAbout:       '',
+  userNotes:       '',
+  history:         [],        // { role, content, ts? }
+  isSending:       false,
+  modelUrl:        '',
+  lastMessageTime: null,      // Date of the last message sent/received
 };
 
 function getPersona(){ return PERSONAS.find(p => p.id === state.personaId) || PERSONAS[0]; }
+
+// ─── TIME AWARENESS ──────────────────────────────────────────────────────────
+function getTimeContext(){
+  const now = new Date();
+  const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames= ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const dayName   = dayNames[now.getDay()];
+  const monthName = monthNames[now.getMonth()];
+  const day       = now.getDate();
+  const year      = now.getFullYear();
+  let   hours     = now.getHours();
+  const minutes   = String(now.getMinutes()).padStart(2,'0');
+  const ampm      = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const timeStr   = `${hours}:${minutes} ${ampm}`;
+
+  let timeOfDay = 'late night';
+  const h24 = now.getHours();
+  if(h24 >= 5  && h24 < 12) timeOfDay = 'morning';
+  else if(h24 >= 12 && h24 < 17) timeOfDay = 'afternoon';
+  else if(h24 >= 17 && h24 < 21) timeOfDay = 'evening';
+  else if(h24 >= 21)             timeOfDay = 'night';
+
+  let gapNote = '';
+  if(state.lastMessageTime){
+    const gapMs  = now - state.lastMessageTime;
+    const gapMin = Math.floor(gapMs / 60000);
+    const gapHr  = Math.floor(gapMin / 60);
+    const gapDay = Math.floor(gapHr  / 24);
+
+    if     (gapDay >= 2)  gapNote = `It has been ${gapDay} days since the user last spoke to you.`;
+    else if(gapDay === 1) gapNote = `It has been about a day since the user last spoke to you.`;
+    else if(gapHr  >= 2)  gapNote = `It has been about ${gapHr} hours since the user last spoke to you.`;
+    else if(gapHr  === 1) gapNote = `It has been about an hour since the user last spoke to you.`;
+    else if(gapMin >= 10) gapNote = `It has been ${gapMin} minutes since the user last spoke to you.`;
+  }
+
+  return (
+    `Current time: ${timeStr} on ${dayName}, ${monthName} ${day}, ${year} (${timeOfDay}).` +
+    (gapNote ? ' ' + gapNote : '')
+  );
+}
 
 function buildSystemPrompt(){
   const p = getPersona();
@@ -81,6 +125,8 @@ function buildSystemPrompt(){
   if(state.userAbout) bits.push(`About them: ${state.userAbout}`);
   if(state.userNotes) bits.push(`Keep in mind: ${state.userNotes}`);
   if(bits.length) prompt += '\n\nWhat you know about this person:\n' + bits.join('\n');
+  prompt += '\n\n' + getTimeContext();
+  prompt += '\nUse your knowledge of the current time and day naturally in conversation when relevant — e.g. if it\'s very late, you might notice. If the user has been away a long time, you can acknowledge it warmly without making it weird.';
   return prompt;
 }
 
@@ -176,6 +222,110 @@ function onResize(){
   renderer.setSize(w, h);
 }
 
+// ─── FACIAL EXPRESSIONS (VRM BlendShapes) ────────────────────────────────────
+// Mood → blend shape preset name mappings (VRM 0.x and 1.x names)
+const EXPR_MAP = {
+  happy:     ['happy',    'Joy'],
+  sad:       ['sad',      'Sorrow'],
+  angry:     ['angry',    'Angry'],
+  surprised: ['surprised','Surprised'],
+  thinking:  ['relaxed',  'Relaxed'],   // closest "pondering" neutral
+  neutral:   ['neutral',  'Neutral'],
+  blink:     ['blink',    'Blink'],
+  blinkL:    ['blinkLeft','BlinkLeft'],
+  blinkR:    ['blinkRight','BlinkRight'],
+};
+
+// Current expression target and current values for lerping
+let exprTarget  = 'neutral';
+let exprCurrent = {};   // name → current weight 0‒1
+let exprBlinkTimer = 0;
+let exprBlinkState = 'open';  // 'open' | 'closing' | 'opening'
+let exprBlinkT     = 0;
+const BLINK_INTERVAL_MIN = 2.5;
+const BLINK_INTERVAL_MAX = 7.0;
+let nextBlink = randomBlinkDelay();
+
+function randomBlinkDelay(){ return BLINK_INTERVAL_MIN + Math.random() * (BLINK_INTERVAL_MAX - BLINK_INTERVAL_MIN); }
+
+// Return the VRM expression manager (works for VRM 0 and 1)
+function getExprManager(){
+  if(!currentVrm) return null;
+  return currentVrm.expressionManager || currentVrm.blendShapeProxy || null;
+}
+
+// Set a named VRM expression to a weight, trying all alias names
+function setVRMExpr(manager, names, weight){
+  if(!manager) return;
+  for(const n of names){
+    try{ manager.setValue(n, weight); } catch(e){}
+  }
+}
+
+// Kick off a mood expression (fades out after `duration` ms, default 4s)
+function setFacialExpression(mood, duration = 4000){
+  if(!getExprManager()) return;
+  exprTarget = mood;
+  if(duration > 0){
+    setTimeout(() => { if(exprTarget === mood) exprTarget = 'neutral'; }, duration);
+  }
+}
+
+// Tick expressions every frame — lerps between neutral and target
+function tickExpressions(dt){
+  const manager = getExprManager();
+  if(!manager) return;
+
+  const ALL_MOODS = ['happy','sad','angry','surprised','thinking','neutral'];
+  const targetNames = EXPR_MAP[exprTarget] || EXPR_MAP['neutral'];
+
+  for(const mood of ALL_MOODS){
+    const names   = EXPR_MAP[mood];
+    const isTarget = (mood === exprTarget);
+    const cur      = exprCurrent[mood] || 0;
+    const goal     = isTarget ? 1 : 0;
+    const speed    = isTarget ? 3.5 : 2.5;
+    const next     = cur + (goal - cur) * Math.min(1, dt * speed);
+    exprCurrent[mood] = next;
+    setVRMExpr(manager, names, Math.max(0, Math.min(1, next)));
+  }
+
+  // Auto-blink
+  exprBlinkTimer += dt;
+  if(exprBlinkState === 'open' && exprBlinkTimer >= nextBlink){
+    exprBlinkState = 'closing';
+    exprBlinkT     = 0;
+    nextBlink      = randomBlinkDelay();
+    exprBlinkTimer = 0;
+  }
+  if(exprBlinkState === 'closing'){
+    exprBlinkT += dt * 10;
+    const w = Math.min(1, exprBlinkT);
+    setVRMExpr(manager, EXPR_MAP['blink'],  w);
+    setVRMExpr(manager, EXPR_MAP['blinkL'], w);
+    setVRMExpr(manager, EXPR_MAP['blinkR'], w);
+    if(exprBlinkT >= 1){ exprBlinkState = 'opening'; exprBlinkT = 0; }
+  } else if(exprBlinkState === 'opening'){
+    exprBlinkT += dt * 8;
+    const w = Math.max(0, 1 - exprBlinkT);
+    setVRMExpr(manager, EXPR_MAP['blink'],  w);
+    setVRMExpr(manager, EXPR_MAP['blinkL'], w);
+    setVRMExpr(manager, EXPR_MAP['blinkR'], w);
+    if(exprBlinkT >= 1){ exprBlinkState = 'open'; exprBlinkT = 0; }
+  }
+}
+
+// Derive facial expression from reply text keywords
+function exprFromReply(text){
+  const l = text.toLowerCase();
+  if(/\b(yay|woohoo|amazing|awesome|love|happy|hehe|nyah|uwu|excited|hype|wag)\b/.test(l))   return 'happy';
+  if(/\b(ugh|seriously|annoying|stop it|come on|eye.?roll|sigh)\b/.test(l))                   return 'angry';
+  if(/\b(oh no|sad|sorry|miss|miss you|:(|aww)\b/.test(l))                                    return 'sad';
+  if(/\b(wait|what|really|no way|omg|seriously\?|whoa|wow)\b/.test(l))                        return 'surprised';
+  if(/\b(hmm|interesting|thinking|wonder|well|actually|honestly)\b/.test(l))                  return 'thinking';
+  return 'neutral';
+}
+
 // ─── PROCEDURAL IDLE ─────────────────────────────────────────────────────────
 function tickProceduralIdle(dt){
   if(!currentVrm || !useProceduralIdle) return;
@@ -214,21 +364,16 @@ function tickProceduralIdle(dt){
   setBoneRot('leftLowerArm',  0, 0,  0.05);
   setBoneRot('rightLowerArm', 0, 0, -0.05);
 
-  // ─── TAIL ANIMATIONS ────────────────────────────────────────────────────────
-  // Gentle tail sway during idle
+  // Tail sway
   const tailWag = Math.sin(t * 0.8) * 0.15;
   const tailZ = Math.cos(t * 0.6) * 0.12;
   setBoneRot('tail', tailWag * 0.3, tailWag * 0.5, tailZ);
-  
-  // Try to animate tail segments if they exist
   for(let i = 1; i <= 3; i++){
     const boneName = 'tail' + i;
     const bone = humanoid.getNormalizedBoneNode(boneName);
     if(bone){
       const offset = i * 0.3;
-      const segWag = Math.sin(t * 0.8 + offset) * 0.12;
-      const segZ = Math.cos(t * 0.6 + offset) * 0.1;
-      setBoneRot(boneName, segWag * 0.2, segWag * 0.4, segZ);
+      setBoneRot(boneName, Math.sin(t * 0.8 + offset) * 0.12 * 0.2, Math.sin(t * 0.8 + offset) * 0.12 * 0.4, Math.cos(t * 0.6 + offset) * 0.1);
     }
   }
 
@@ -246,6 +391,9 @@ function animate(){
   } else if(currentVrm){
     currentVrm.update(dt);
   }
+
+  // Facial expressions tick every frame regardless of anim mode
+  tickExpressions(dt);
 
   if(controls) controls.update();
   renderer.render(scene, camera);
@@ -267,6 +415,8 @@ function onModelLoad(gltf){
   currentVrm        = null;
   useProceduralIdle = false;
   _cachedClips      = gltf.animations || [];
+  exprCurrent       = {};
+  exprTarget        = 'neutral';
 
   const vrm = gltf.userData.vrm;
 
@@ -315,6 +465,7 @@ function onModelLoad(gltf){
 
   loadingVeil.classList.add('hidden');
   setMood('curious');
+  setFacialExpression('neutral', 0);
 }
 
 function onModelError(err){
@@ -414,19 +565,24 @@ function setMood(word){ moodWord.textContent = word; }
 
 function reactToUserMessage(){
   setMood('listening');
+  setFacialExpression('neutral', 0);
   tryPlayByPattern(/wave|greet|hello/i, false);
 }
 
 function reactWhileThinking(){
   setMood('thinking');
+  setFacialExpression('thinking', 0);
   tryPlayByPattern(/think|ponder/i, true);
 }
 
 function reactToReply(replyText){
   setMood('speaking');
+  const expr = exprFromReply(replyText);
+  setFacialExpression(expr, 4500);
   detectAndPlayKeywordAnim(replyText);
   setTimeout(() => {
     setMood('curious');
+    setFacialExpression('neutral', 0);
     if(idleClipName){
       playClip(idleClipName, true);
     } else {
@@ -480,6 +636,91 @@ function escapeHtml(s){
   return d.innerHTML;
 }
 
+// ─── REGEN / CONTINUE BUTTONS ────────────────────────────────────────────────
+let lastLunaBubble = null;   // tracks the most recent Luna .bubble element
+
+function addRegenContinueButtons(msgWrap){
+  // Remove buttons from any previously last Luna message
+  const old = fullChatScroll.querySelectorAll('.regen-bar');
+  old.forEach(el => el.remove());
+
+  const bar = document.createElement('div');
+  bar.className = 'regen-bar';
+
+  const regenBtn = document.createElement('button');
+  regenBtn.className   = 'ghost-btn regen-action';
+  regenBtn.innerHTML   = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span>Regenerate</span>`;
+  regenBtn.title       = 'Regenerate this reply';
+  regenBtn.addEventListener('click', () => regenerateLastReply());
+
+  const contBtn = document.createElement('button');
+  contBtn.className   = 'ghost-btn regen-action';
+  contBtn.innerHTML   = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg><span>Continue</span>`;
+  contBtn.title       = 'Ask her to continue';
+  contBtn.addEventListener('click', () => continueLastReply());
+
+  bar.appendChild(regenBtn);
+  bar.appendChild(contBtn);
+  msgWrap.appendChild(bar);
+}
+
+async function regenerateLastReply(){
+  // Pop the last assistant message from history, re-send
+  if(state.isSending) return;
+  const lastIdx = [...state.history].reverse().findIndex(m => m.role === 'assistant');
+  if(lastIdx === -1) return;
+  const realIdx = state.history.length - 1 - lastIdx;
+  state.history.splice(realIdx, 1);
+
+  // Remove last Luna message from UI
+  const lunaMessages = fullChatScroll.querySelectorAll('.msg.from-luna');
+  if(lunaMessages.length) lunaMessages[lunaMessages.length - 1].remove();
+  // Remove any stale regen bars
+  fullChatScroll.querySelectorAll('.regen-bar').forEach(el => el.remove());
+
+  await dispatchReply();
+}
+
+async function continueLastReply(){
+  if(state.isSending) return;
+  // Inject a silent user prod so Luna knows to keep going
+  const silentProd = { role: 'user', content: '[continue your thought — keep going]' };
+  const historyWithProd = [...state.history, silentProd];
+  await dispatchReply(historyWithProd, /*skipPush=*/true);
+}
+
+// Core function that calls the API and pushes Luna's reply to UI
+// historyOverride: optionally use a different history array for the call
+// skipHistoryPush: don't push the user message (for continue)
+async function dispatchReply(historyOverride, skipHistoryPush = false){
+  if(state.isSending) return;
+  if(!state.openRouterKey){ openKeyCard(); return; }
+
+  state.isSending  = true;
+  sendBtn.disabled = true;
+  reactWhileThinking();
+  setLatestLine('<div class="typing-dots"><span></span><span></span><span></span></div>');
+
+  try{
+    const reply = await callOpenRouter(historyOverride || state.history);
+    state.history.push({ role: 'assistant', content: reply, ts: Date.now() });
+    state.lastMessageTime = new Date();
+    const msgWrap = pushFullChatMsg('assistant', reply);
+    setLatestLine(escapeHtml(reply));
+    persistHistory();
+    reactToReply(reply);
+    speakText(reply);
+    if(msgWrap) addRegenContinueButtons(msgWrap);
+  } catch(err){
+    console.error(err);
+    pushSystemMsg('Connection failed: ' + (err.message || 'unknown error'));
+    setMood('dormant');
+  } finally{
+    state.isSending  = false;
+    sendBtn.disabled = false;
+  }
+}
+
 function pushFullChatMsg(role, text){
   const wrap = document.createElement('div');
   wrap.className = 'msg ' + (role === 'user' ? 'from-user' : 'from-luna');
@@ -487,6 +728,7 @@ function pushFullChatMsg(role, text){
   wrap.querySelector('.bubble').textContent = text;
   fullChatScroll.appendChild(wrap);
   fullChatScroll.scrollTop = fullChatScroll.scrollHeight;
+  return wrap;
 }
 
 function pushSystemMsg(text){
@@ -500,8 +742,14 @@ function pushSystemMsg(text){
 }
 
 function persistHistory(){
-  try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history.slice(-MAX_STORED_MESSAGES))); }
-  catch(e){ console.warn('Could not persist history', e); }
+  try{
+    const toStore = state.history.slice(-MAX_STORED_MESSAGES);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(toStore));
+    // Also persist the last message timestamp so time gap survives refresh
+    if(state.lastMessageTime){
+      localStorage.setItem(HISTORY_KEY + '_lastTs', String(state.lastMessageTime.getTime()));
+    }
+  } catch(e){ console.warn('Could not persist history', e); }
 }
 
 function loadHistory(){
@@ -515,20 +763,36 @@ function loadHistory(){
 
 function renderHistory(){
   state.history = loadHistory();
+
+  // Restore last message timestamp for time-gap awareness
+  const savedTs = localStorage.getItem(HISTORY_KEY + '_lastTs');
+  if(savedTs){
+    const ms = parseInt(savedTs, 10);
+    if(!isNaN(ms)) state.lastMessageTime = new Date(ms);
+  }
+
   if(!state.history.length) return false;
   state.history.forEach(m => pushFullChatMsg(m.role === 'assistant' ? 'assistant' : 'user', m.content));
   const last = state.history[state.history.length - 1];
   if(last) setLatestLine(escapeHtml(last.content));
+
+  // Re-attach regen/continue to the last Luna message
+  const lunaMessages = fullChatScroll.querySelectorAll('.msg.from-luna');
+  if(lunaMessages.length) addRegenContinueButtons(lunaMessages[lunaMessages.length - 1]);
+
   return true;
 }
 
 function clearHistory(){
-  state.history = [];
+  state.history        = [];
+  state.lastMessageTime= null;
   localStorage.removeItem(HISTORY_KEY);
+  localStorage.removeItem(HISTORY_KEY + '_lastTs');
   fullChatScroll.innerHTML = '';
   setLatestLine('say hi to wake her up...', true);
 }
 
+// ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
 async function sendMessage(){
   const text = msgInput.value.trim();
   if(!text || state.isSending) return;
@@ -537,36 +801,15 @@ async function sendMessage(){
   msgInput.value = '';
   autoGrow();
 
-  state.history.push({ role: 'user', content: text });
+  const ts = Date.now();
+  state.history.push({ role: 'user', content: text, ts });
+  state.lastMessageTime = new Date(ts);
   pushFullChatMsg('user', text);
   setLatestLine(escapeHtml(text));
   persistHistory();
   reactToUserMessage();
 
-  state.isSending  = true;
-  sendBtn.disabled = true;
-
-  setTimeout(() => {
-    reactWhileThinking();
-    setLatestLine('<div class="typing-dots"><span></span><span></span><span></span></div>');
-  }, 150);
-
-  try{
-    const reply = await callOpenRouter(state.history);
-    state.history.push({ role: 'assistant', content: reply });
-    pushFullChatMsg('assistant', reply);
-    setLatestLine(escapeHtml(reply));
-    persistHistory();
-    reactToReply(reply);
-    speakText(reply);
-  } catch(err){
-    console.error(err);
-    pushSystemMsg('Connection failed: ' + (err.message || 'unknown error'));
-    setMood('dormant');
-  } finally{
-    state.isSending  = false;
-    sendBtn.disabled = false;
-  }
+  await dispatchReply();
 }
 
 // ─── OPENROUTER API ──────────────────────────────────────────────────────────
@@ -693,6 +936,81 @@ fullChatComposer.addEventListener('click', () => {
   msgInput.focus();
 });
 
+// ─── SAVE / LOAD CHAT ────────────────────────────────────────────────────────
+function saveChatToFile(){
+  if(!state.history.length){
+    pushSystemMsg('Nothing to save yet — start chatting first!');
+    return;
+  }
+  const payload = {
+    version:   3,
+    savedAt:   new Date().toISOString(),
+    personaId: state.personaId,
+    userName:  state.userName,
+    messages:  state.history
+  };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href     = url;
+  a.download = `luna-chat-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  pushSystemMsg('Chat saved! Check your downloads folder.');
+}
+
+function loadChatFromFile(){
+  const input = document.createElement('input');
+  input.type   = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if(!file) return;
+    try{
+      const text    = await file.text();
+      const payload = JSON.parse(text);
+      if(!Array.isArray(payload.messages)){
+        throw new Error('Invalid chat file — no messages array found.');
+      }
+      // Clear current chat, load saved messages
+      clearHistory();
+      state.history = payload.messages;
+      if(payload.personaId){
+        state.personaId = payload.personaId;
+        applyPersonaTheme();
+        buildPersonaGrid();
+      }
+      if(payload.userName && !state.userName){
+        state.userName = payload.userName;
+      }
+      // Restore last timestamp from the file if available
+      const lastMsg = [...payload.messages].reverse().find(m => m.ts);
+      if(lastMsg?.ts) state.lastMessageTime = new Date(lastMsg.ts);
+
+      // Render messages
+      payload.messages.forEach(m => pushFullChatMsg(m.role === 'assistant' ? 'assistant' : 'user', m.content));
+      const last = payload.messages[payload.messages.length - 1];
+      if(last) setLatestLine(escapeHtml(last.content));
+
+      // Re-attach regen/continue to last Luna message
+      const lunaMessages = fullChatScroll.querySelectorAll('.msg.from-luna');
+      if(lunaMessages.length) addRegenContinueButtons(lunaMessages[lunaMessages.length - 1]);
+
+      persistHistory();
+      pushSystemMsg(`Chat loaded! ${payload.messages.length} messages restored from ${payload.savedAt?.slice(0,10) || 'file'}.`);
+    } catch(err){
+      pushSystemMsg('Could not load chat: ' + (err.message || 'invalid file'));
+    }
+  });
+  document.body.appendChild(input);
+  input.click();
+  document.body.removeChild(input);
+}
+
 // ─── SETTINGS / ABOUT / FIRST-RUN KEY ────────────────────────────────────────
 const settingsVeil   = document.getElementById('settings-veil');
 const aboutVeil      = document.getElementById('about-veil');
@@ -701,7 +1019,7 @@ const personaGrid    = document.getElementById('persona-grid');
 const userNameInput  = document.getElementById('user-name');
 const userAboutInput = document.getElementById('user-about');
 const userNotesInput = document.getElementById('user-notes');
-const orKeyInput     = document.getElementById('gemini-key');       // reused input field
+const orKeyInput     = document.getElementById('gemini-key');
 const elKeyInput     = document.getElementById('elevenlabs-key');
 const modelUrlInput  = document.getElementById('model-url-input');
 const statusPill     = document.getElementById('status-pill');
@@ -714,7 +1032,6 @@ const keyCardInput   = document.getElementById('key-card-input');
   if(label) label.textContent = 'OpenRouter API key';
   const note = orKeyInput?.closest('.field')?.querySelector('.note');
   if(note) note.innerHTML = 'Free at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>. Default model: <code>' + DEFAULT_MODEL_ID + '</code>.';
-  // Also update the key card prompt text
   const keyCardP = document.querySelector('#key-card p');
   if(keyCardP) keyCardP.textContent = 'Before I can wake up properly I need an OpenRouter key to think with — it\'s free and takes like 30 seconds to grab.';
   const keyCardNote = document.querySelector('#key-card .note');
@@ -723,6 +1040,55 @@ const keyCardInput   = document.getElementById('key-card-input');
   if(keyCardInput2) keyCardInput2.placeholder = 'paste your OpenRouter API key';
   const keyCardH2 = document.querySelector('#key-card h2');
   if(keyCardH2) keyCardH2.textContent = "hii, I'm Luna!";
+})();
+
+// ── Inject Save/Load buttons into the settings sheet ────────────────────────
+(function injectSaveLoadButtons(){
+  const sheetActions = document.querySelector('#settings-sheet .sheet-actions');
+  if(!sheetActions) return;
+
+  // Save chat button
+  const saveBtn = document.createElement('button');
+  saveBtn.className   = 'btn';
+  saveBtn.textContent = 'Save chat';
+  saveBtn.title       = 'Download chat history as JSON';
+  saveBtn.addEventListener('click', () => { closeSettings(); saveChatToFile(); });
+
+  // Load chat button
+  const loadBtn = document.createElement('button');
+  loadBtn.className   = 'btn';
+  loadBtn.textContent = 'Load chat';
+  loadBtn.title       = 'Import a previously saved chat JSON';
+  loadBtn.addEventListener('click', () => { closeSettings(); loadChatFromFile(); });
+
+  // Insert before "Clear chat"
+  sheetActions.insertBefore(saveBtn, sheetActions.firstChild);
+  sheetActions.insertBefore(loadBtn, saveBtn.nextSibling);
+})();
+
+// ── Inject CSS for regen bar & save/load into <head> ────────────────────────
+(function injectStyles(){
+  const style = document.createElement('style');
+  style.textContent = `
+    .regen-bar {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+      margin-left: 2px;
+    }
+    .regen-action {
+      font-size: 0.58rem;
+      padding: 5px 9px;
+      gap: 4px;
+      opacity: 0.65;
+      transition: opacity 0.15s ease;
+    }
+    .regen-action:hover { opacity: 1; }
+    .regen-action svg { flex-shrink: 0; }
+    /* Constrain settings actions to wrap gracefully */
+    .sheet-actions { flex-wrap: wrap; }
+  `;
+  document.head.appendChild(style);
 })();
 
 function openSettings(){
@@ -825,7 +1191,6 @@ function submitKeyCard(){
 }
 
 // ─── MIGRATE OLD STORAGE ─────────────────────────────────────────────────────
-// If user has v2 save data (Gemini key), carry over non-key fields and drop the old key.
 function migrateOldStorage(){
   const OLD_KEY = 'luna_ai_catgirl_v2';
   const old = localStorage.getItem(OLD_KEY);
@@ -867,7 +1232,6 @@ function migrateOldStorage(){
       buildPersonaGrid();
     } catch(e){ console.warn('Could not restore saved data', e); }
   } else {
-    // No v3 data — check for v2 migration
     const migrated = migrateOldStorage();
     if(migrated){
       state.elevenLabsKey = migrated.elevenLabsKey || DEFAULT_ELEVENLABS_KEY;
@@ -882,7 +1246,6 @@ function migrateOldStorage(){
       elKeyInput.value     = state.elevenLabsKey;
       modelUrlInput.value  = state.modelUrl;
       buildPersonaGrid();
-      // Don't migrate old Gemini key — user will need to enter OpenRouter key
     } else {
       state.elevenLabsKey = DEFAULT_ELEVENLABS_KEY;
     }
