@@ -30,7 +30,7 @@ Click the gear icon in the top-right corner to tweak:
 - The 3D model URL
 - Personal notes about the user
  - Relationship role: `Friend` (default), `Family`, `Crush`, or `Partner` — controls how romantic or familial Luna's tone should be.
- - Relationship role: `Friend` (default), `Family`, `Crush`, `Partner`, or `Hated` — controls how Luna's tone should be. Luna may suggest role changes during conversation; you'll be asked to accept or decline them.
+ - Relationship role: `Friend` (default), `Sister`, `Crush`, `Partner`, or `Hater` — controls how Luna's tone should be. Luna may suggest role changes during conversation; you'll be asked to accept or decline them.
 
 ## Changing the avatar model
 1. Create or download a rigged .vrm or .glb file.

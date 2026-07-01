@@ -83,10 +83,10 @@ function buildSystemPrompt(){
   const role = (state.role || 'friend').toLowerCase();
   const roleMap = {
     friend: "Treat the user as a close friend; keep interactions warm but non-romantic.",
-    family: "Treat the user like family; neutral, caring, familial tone and boundaries.",
+    family: "Treat the user like a sister; neutral, caring, sibling-like tone and boundaries.",
     crush: "Lightly romantic tone; affectionate hints, gentle flirtation while respectful.",
     partner: "Romantic partner tone; intimate, affectionate, and overtly romantic within consent boundaries."
-    ,hated: "Acknowledge the 'hated' role by adopting a terse, distant tone. Do NOT insult, harass, or encourage abuse — keep replies minimal, neutral, and avoid escalating language."
+    ,hater: "Acknowledge the 'hater' role by adopting a terse, distant tone. Do NOT insult, harass, or encourage abuse — keep replies minimal, neutral, and avoid escalating language."
   };
   prompt += '\n\nRelationship guidance: ' + (roleMap[role] || roleMap.friend);
   const bits = [];
@@ -101,7 +101,7 @@ function buildSystemPrompt(){
 function buildRoleGrid(){
   const grid = document.getElementById('role-grid');
   if(!grid) return;
-  const labels = { friend: 'Friend', family: 'Family', crush: 'Crush', partner: 'Partner', hated: 'Hated' };
+  const labels = { friend: 'Friend', family: 'Sister', crush: 'Crush', partner: 'Partner', hater: 'Hater' };
   const persona = getPersona();
   [...grid.querySelectorAll('.role-card')].forEach(btn => {
     const role = btn.dataset.role;
@@ -135,7 +135,7 @@ function detectRoleTriggers(text){
   // Partner / dating triggers
   if(/be my partner|will you be my partner|date me|marry me|let's be partners|i want to be your partner/.test(lower)) return 'partner';
   if(/i love you|i'm in love with you|i love u/.test(lower)) return 'crush';
-  if(/i hate you|i don't want to talk|leave me alone|i want to break up/.test(lower)) return 'hated';
+  if(/i hate you|i don't want to talk|leave me alone|i want to break up/.test(lower)) return 'hater';
   if(/you're like family|treat you like family|we're family/.test(lower)) return 'family';
   return null;
 }
@@ -144,7 +144,7 @@ function showRoleSuggestion(role){
   try{
     const container = document.getElementById('role-suggest');
     if(!container) return;
-    const labels = { friend: 'Friend', family: 'Family', crush: 'Crush', partner: 'Partner', hated: 'Hated' };
+    const labels = { friend: 'Friend', family: 'Sister', crush: 'Crush', partner: 'Partner', hater: 'Hater' };
     container.innerHTML = `<span class="suggest-text">Luna suggests: <strong>${labels[role]}</strong></span>`;
     const accept = document.createElement('button'); accept.className = 'suggest-btn accept'; accept.textContent = 'Accept';
     const reject = document.createElement('button'); reject.className = 'suggest-btn'; reject.textContent = 'Decline';
