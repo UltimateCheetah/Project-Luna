@@ -170,6 +170,10 @@ html,body{
 #latest-line::-webkit-scrollbar{ width:4px; }
 #latest-line::-webkit-scrollbar-thumb{ background:var(--panel-edge); border-radius:2px; }
 #latest-line.placeholder{ color:var(--ink-faint); font-style:italic; }
+.reply-actions{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 10px; }
+.reply-actions .ghost-btn{ padding:6px 10px; }
+.reply-actions .ghost-btn[disabled]{ opacity:0.45; cursor:not-allowed; }
+.reply-actions .ghost-btn.danger{ color:#ff8fa8; border-color:rgba(255,143,168,0.28); }
 #latest-line .typing-dots{ display:inline-flex; gap:4px; padding:4px 0; }
 #latest-line .typing-dots span{
   width:5px; height:5px; border-radius:50%; background:var(--signal);
@@ -310,7 +314,7 @@ html,body{
 #persona-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .persona-card{
   position:relative; border:1px solid var(--panel-edge); border-radius:12px;
-  padding:14px 12px; cursor:pointer; background:var(--void); transition:all 0.15s ease; text-align:left;
+  padding:14px 12px; cursor:pointer; background:var(--void); transition:all 0.15s ease; text-align:left; /* No-op placeholder */
 }
 .persona-card:hover{ border-color:var(--persona-color, var(--signal-dim)); transform:translateY(-1px); }
 .persona-card.active{
@@ -326,6 +330,35 @@ html,body{
   align-items:center; justify-content:center; color:var(--void-deep); font-size:10px; font-weight:900;
 }
 .persona-card.active .check{ display:flex; }
+
+/* Role card reuses persona styles but with subtle tint */
+.role-card{ --persona-color: var(--signal); }
+.role-card{ padding:12px; text-align:center; font-family:var(--font-mono); font-size:0.86rem; }
+.role-card .pname{
+  display:block; font-family:var(--font-display); font-style:italic; font-weight:600;
+  font-size:1rem; color:var(--ink); margin-bottom:3px;
+}
+.role-card .ptag{
+  display:block; font-family:var(--font-mono); font-size:0.68rem; color:var(--ink-faint);
+  letter-spacing:0.04em; line-height:1.5;
+}
+.role-card.active{ border-color:var(--signal); box-shadow:0 0 0 1px var(--signal) inset, 0 0 8px -4px var(--signal); }
+
+/* Credit warning state on status pill */
+.status-pill.credit-warn{ border-color:#ff6b8f; color:#ff8fa8; }
+.status-pill.credit-warn .status-dot{ background:#ff6b8f; box-shadow:0 0 8px #ff6b8f; }
+
+/* Role suggestion UI */
+.role-suggest{
+  display:flex; align-items:center; gap:8px; margin-left:8px; font-family:var(--font-mono);
+}
+.role-suggest .suggest-text{ font-size:0.68rem; color:var(--ink-dim); }
+.role-suggest .suggest-btn{
+  padding:6px 10px; border-radius:10px; border:1px solid var(--panel-edge);
+  background:transparent; color:var(--ink); cursor:pointer; font-family:var(--font-mono); font-size:0.66rem;
+}
+.role-suggest .suggest-btn.accept{ background:var(--signal); color:var(--void); border-color:var(--signal); }
+.role-suggest.hidden{ display:none; }
 
 .sheet-actions{ display:flex; gap:10px; margin-top:22px; }
 .btn{
@@ -387,6 +420,8 @@ html,body{
 .toast-x:hover{ color:var(--ink); }
 
 @media (max-width: 640px){
+  .reply-actions{ margin-bottom:8px; }
+  .reply-actions .ghost-btn{ font-size:0.56rem; padding:5px 8px; }
   .brand .sub{ display:none; }
   .brand .mark{ font-size:1.3rem; }
   .status-pill span:not(.status-dot){ display:none; }
@@ -396,6 +431,12 @@ html,body{
   #persona-grid{ grid-template-columns:1fr; }
   #mood-readout{ display:none; }
   #anim-controls{ max-width:60%; }
+  #dialogue-bar{ padding:10px 12px calc(10px + var(--safe-bottom)); }
+  #latest-line{ font-size:0.88rem; max-height:6.2em; }
+  #composer-inner{ gap:6px; padding:8px 8px 8px 12px; }
+  #send-btn{ width:40px; height:40px; }
+  #anim-controls{ right:10px; left:10px; bottom:70px; justify-content:center; max-width:unset; }
+  #full-chat-scroll{ padding:12px; max-width:96%; }
 }
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }

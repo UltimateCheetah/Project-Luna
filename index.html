@@ -28,6 +28,7 @@
         <span class="status-dot" id="status-dot"></span>
         <span id="status-text">WAKING UP</span>
       </div>
+      <div id="role-suggest" class="role-suggest" hidden></div>
       <button class="icon-btn" id="open-settings" title="Settings" aria-label="Open settings">
         <svg width="16" height="16" viewbox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -56,6 +57,11 @@
         </div>
       </div>
       <div id="latest-line" class="placeholder">say hi to wake her up...</div>
+      <div id="reply-actions" class="reply-actions" aria-label="Reply actions">
+        <button class="ghost-btn" id="regenerate-btn" type="button">↺ Regenerate</button>
+        <button class="ghost-btn" id="continue-btn" type="button">↳ Continue</button>
+        <button class="ghost-btn danger" id="stop-btn" type="button" hidden>■ Stop</button>
+      </div>
       <div id="composer-inner">
         <textarea id="msg-input" rows="1" placeholder="say something..."></textarea>
         <button id="mic-btn" aria-label="Voice input" title="Speak to Luna">
@@ -91,13 +97,25 @@
 
     <div class="section-divider">personality</div>
     <div id="persona-grid"></div>
+    <div class="section-divider">relationship</div>
+    <div class="field">
+      <label for="role-grid">How Luna should treat you</label>
+      <div id="role-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px;">
+        <button class="persona-card role-card active" data-role="friend">Friend<div class="check">✓</div></button>
+        <button class="persona-card role-card" data-role="family">Family<div class="check">✓</div></button>
+        <button class="persona-card role-card" data-role="crush">Crush<div class="check">✓</div></button>
+        <button class="persona-card role-card" data-role="partner">Partner<div class="check">✓</div></button>
+        <button class="persona-card role-card" data-role="hated">Hated<div class="check">✓</div></button>
+      </div>
+      <div class="note">Friend: non-romantic. Family: familial tone. Crush: lightly romantic. Partner: strongly romantic.</div>
+    </div>
     <button class="btn link" id="open-about-from-settings" style="margin-top:18px;">→ Tell her about you</button>
 
     <div class="section-divider">connection</div>
     <div class="field">
-      <label for="gemini-key">Gemini API key</label>
-      <input type="password" id="gemini-key" placeholder="AIza..." autocomplete="off" />
-      <div class="note">Free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</div>
+      <label for="gemini-key">OpenRouter API key</label>
+      <input type="password" id="gemini-key" placeholder="sk-or-..." autocomplete="off" />
+      <div class="note">Free at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>.</div>
     </div>
     <div class="field">
       <label for="elevenlabs-key">ElevenLabs API key (TTS)</label>

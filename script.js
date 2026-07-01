@@ -63,12 +63,15 @@ const state = {
   elevenLabsKey:  '',
   modelId:        DEFAULT_MODEL_ID,
   personaId:      'sweet',
+  role:           'friend',
+  creditUsagePercent: 75,
   userName:       '',
   userAbout:      '',
   userNotes:      '',
   history:        [],
   isSending:      false,
-  modelUrl:       ''
+  modelUrl:       '',
+  mood:           'dormant'
 };
 
 function getPersona(){ return PERSONAS.find(p => p.id === state.personaId) || PERSONAS[0]; }
@@ -76,12 +79,94 @@ function getPersona(){ return PERSONAS.find(p => p.id === state.personaId) || PE
 function buildSystemPrompt(){
   const p = getPersona();
   let prompt = p.prompt;
+  // Describe relationship role expectations
+  const role = (state.role || 'friend').toLowerCase();
+  const roleMap = {
+    friend: "Treat the user as a close friend; keep interactions warm but non-romantic.",
+    family: "Treat the user like family; neutral, caring, familial tone and boundaries.",
+    crush: "Lightly romantic tone; affectionate hints, gentle flirtation while respectful.",
+    partner: "Romantic partner tone; intimate, affectionate, and overtly romantic within consent boundaries."
+    ,hated: "Acknowledge the 'hated' role by adopting a terse, distant tone. Do NOT insult, harass, or encourage abuse — keep replies minimal, neutral, and avoid escalating language."
+  };
+  prompt += '\n\nRelationship guidance: ' + (roleMap[role] || roleMap.friend);
   const bits = [];
   if(state.userName)  bits.push(`The user's name is ${state.userName}.`);
   if(state.userAbout) bits.push(`About them: ${state.userAbout}`);
   if(state.userNotes) bits.push(`Keep in mind: ${state.userNotes}`);
   if(bits.length) prompt += '\n\nWhat you know about this person:\n' + bits.join('\n');
+  prompt += '\n\nConversation rules:\n- Keep replies short, warm, and natural.\n- If the user asks to continue or regenerate, follow up from the previous reply without losing the same mood.\n- Avoid sounding like a robot or reading from a script.';
   return prompt;
+}
+
+function buildRoleGrid(){
+  const grid = document.getElementById('role-grid');
+  if(!grid) return;
+  const labels = { friend: 'Friend', family: 'Family', crush: 'Crush', partner: 'Partner', hated: 'Hated' };
+  const persona = getPersona();
+  [...grid.querySelectorAll('.role-card')].forEach(btn => {
+    const role = btn.dataset.role;
+    // set persona color for styling consistency
+    btn.style.setProperty('--persona-color', persona.color);
+    const personaLabel = persona.mood;
+    btn.innerHTML = `<div class="pname">${personaLabel}</div><div class="ptag">${labels[role] || role}</div><div class="check">✓</div>`;
+    btn.classList.toggle('active', role === state.role);
+    // remove old listeners to avoid duplication
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+  });
+  // re-query after clone/replace to attach listeners
+  [...grid.querySelectorAll('.role-card')].forEach(btn => {
+    const role = btn.dataset.role;
+    btn.addEventListener('click', () => {
+      state.role = role;
+      persist();
+      [...grid.querySelectorAll('.role-card')].forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      pushSystemMsg(`Role set to ${labels[role]}.`);
+    });
+  });
+}
+
+// ─── ROLE SUGGESTION / AUTO-SWITCH ──────────────────────────────────────────
+let lastRoleSuggestionAt = 0;
+function detectRoleTriggers(text){
+  if(!text) return null;
+  const lower = text.toLowerCase();
+  // Partner / dating triggers
+  if(/be my partner|will you be my partner|date me|marry me|let's be partners|i want to be your partner/.test(lower)) return 'partner';
+  if(/i love you|i'm in love with you|i love u/.test(lower)) return 'crush';
+  if(/i hate you|i don't want to talk|leave me alone|i want to break up/.test(lower)) return 'hated';
+  if(/you're like family|treat you like family|we're family/.test(lower)) return 'family';
+  return null;
+}
+
+function showRoleSuggestion(role){
+  try{
+    const container = document.getElementById('role-suggest');
+    if(!container) return;
+    const labels = { friend: 'Friend', family: 'Family', crush: 'Crush', partner: 'Partner', hated: 'Hated' };
+    container.innerHTML = `<span class="suggest-text">Luna suggests: <strong>${labels[role]}</strong></span>`;
+    const accept = document.createElement('button'); accept.className = 'suggest-btn accept'; accept.textContent = 'Accept';
+    const reject = document.createElement('button'); reject.className = 'suggest-btn'; reject.textContent = 'Decline';
+    accept.addEventListener('click', () => {
+      state.role = role; persist(); buildRoleGrid(); pushSystemMsg(`Role changed to ${labels[role]}.`); container.hidden = true; updateStatus();
+    });
+    reject.addEventListener('click', () => { container.hidden = true; pushSystemMsg('Role suggestion declined.'); });
+    container.appendChild(accept); container.appendChild(reject);
+    container.hidden = false;
+    lastRoleSuggestionAt = Date.now();
+  }catch(e){ console.warn('Role suggestion failed', e); }
+}
+
+function maybeSuggestRoleFromMessage(text){
+  const now = Date.now();
+  if(now - lastRoleSuggestionAt < 1000 * 60 * 2) return; // don't suggest more than once every 2 minutes
+  const suggested = detectRoleTriggers(text);
+  if(!suggested) return;
+  // Avoid suggesting the same role that's already active
+  if(suggested === state.role) return;
+  // For safety, always suggest and ask user to accept before applying partner/crush changes
+  showRoleSuggestion(suggested);
 }
 
 function applyPersonaTheme(){
@@ -92,6 +177,8 @@ function applyPersonaTheme(){
   document.getElementById('speaker-name').textContent   = 'Luna';
   document.getElementById('full-chat-name').textContent = 'Luna';
   document.getElementById('brand-sub').textContent      = p.mood + ' · ' + p.tagline;
+  // Rebuild role labels so they immediately reflect the persona change
+  try{ buildRoleGrid(); }catch(e){}
 }
 
 // ─── THREE.JS SCENE ──────────────────────────────────────────────────────────
@@ -116,6 +203,7 @@ let voiceAudioAnalyser = null;
 let voiceAudioData = null;
 let voiceAudioUrl = '';
 const voiceAudio = new Audio();
+let currentRequestController = null;
 
 voiceAudio.addEventListener('ended', () => {
   if(voiceAudioUrl){
@@ -256,6 +344,65 @@ function tickProceduralIdle(dt){
   currentVrm.update(dt);
 }
 
+// ─── BONE / GESTURE HELPERS ─────────────────────────────────────────────────
+function getBone(name){
+  try{
+    return currentVrm?.humanoid?.getNormalizedBoneNode(name) || null;
+  } catch(e){ return null; }
+}
+
+function applyBoneRotationImmediate(name, x=0, y=0, z=0){
+  const b = getBone(name);
+  if(!b) return false;
+  b.rotation.x = x; b.rotation.y = y; b.rotation.z = z;
+  return true;
+}
+
+function pulseBoneGesture(entries = [], opts = {}){
+  // entries: [{bone:'head', from:[x,y,z], to:[x,y,z], dur:400}]
+  const start = performance.now();
+  const run = (now) => {
+    const t = Math.min(1, (now - start) / (opts.duration || 400));
+    for(const e of entries){
+      const b = getBone(e.bone);
+      if(!b) continue;
+      const from = e.from || [b.rotation.x, b.rotation.y, b.rotation.z];
+      const to = e.to || from;
+      const ease = opts.ease ? (Math.sin((t - 0.5) * Math.PI) * 0.5 + 0.5) : t;
+      b.rotation.x = from[0] + (to[0] - from[0]) * ease;
+      b.rotation.y = from[1] + (to[1] - from[1]) * ease;
+      b.rotation.z = from[2] + (to[2] - from[2]) * ease;
+    }
+    if(t < 1) requestAnimationFrame(run);
+    else if(typeof opts.onComplete === 'function') opts.onComplete();
+  };
+  requestAnimationFrame(run);
+}
+
+function animateMoodGesture(mood){
+  if(!currentVrm) return;
+  // Simple mapping: create gentle temporary rotations for head/ears/tail
+  mood = (mood || '').toLowerCase();
+  if(/happy|excited|love|yay|awesome/.test(mood)){
+    pulseBoneGesture([
+      { bone: 'head', from: [0,0,0], to: [-0.06, 0.12, 0.02] },
+      { bone: 'tail', from: [0,0,0], to: [0.12, 0.6, 0.08] }
+    ], { duration: 420, ease: true });
+  } else if(/angry|mad|frustrated/.test(mood)){
+    pulseBoneGesture([
+      { bone: 'head', from: [0,0,0], to: [0.06, -0.06, -0.02] },
+      { bone: 'leftUpperArm', from: [0,0,0], to: [0.2, 0.2, -1.2] }
+    ], { duration: 400, ease: true });
+  } else if(/thinking|curious|listen|listening/.test(mood)){
+    pulseBoneGesture([
+      { bone: 'head', from: [0,0,0], to: [-0.04, 0.08, 0.02] }
+    ], { duration: 700, ease: true });
+  } else if(/dormant/.test(mood)){
+    // subtle tail flick
+    pulseBoneGesture([{ bone: 'tail', from: [0,0,0], to: [0.06, 0.18, 0.03] }], { duration: 700 });
+  }
+}
+
 function tickBlink(dt){
   const em = currentVrm?.expressionManager;
   if(!em) return;
@@ -358,6 +505,27 @@ function tickLipSync(dt){
   em.setValue('oh', lipLevel * round * 0.4);
 }
 
+function applyAvatarMood(){
+  const em = currentVrm?.expressionManager;
+  if(!em) return;
+
+  const mood = state.mood || 'dormant';
+  let happy = 0;
+  let sad = 0;
+  let angry = 0;
+  let surprised = 0;
+
+  if(mood === 'speaking' || mood === 'listening') happy = 0.16;
+  if(mood === 'thinking') sad = 0.1;
+  if(mood === 'curious' || mood === 'listening') surprised = 0.08;
+  if(mood === 'dormant') happy = 0.03;
+
+  em.setValue('happy', happy);
+  em.setValue('sad', sad);
+  em.setValue('angry', angry);
+  em.setValue('surprised', surprised);
+}
+
 function animate(){
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
@@ -367,6 +535,7 @@ function animate(){
   if(currentVrm){
     tickBlink(dt);
     tickLipSync(dt);
+    applyAvatarMood();
   }
 
   if(useProceduralIdle){
@@ -544,6 +713,13 @@ function detectAndPlayKeywordAnim(replyText){
       if(clip){ playClip(clip.name, false); return; }
     }
   }
+  // Also trigger small bone gestures for expressive feedback
+  try{
+    if(/love|happy|yay|awesome|excited/.test(lower)) animateMoodGesture('happy');
+    else if(/angry|ugh|seriously|mad|frustrated/.test(lower)) animateMoodGesture('angry');
+    else if(/thinking|hmm|let me think|interesting|wondering/.test(lower)) animateMoodGesture('thinking');
+    else if(/bye|goodbye|see you|later|cya/.test(lower)) animateMoodGesture('dormant');
+  }catch(e){}
 }
 
 // ─── TOAST / ERROR POPUPS ────────────────────────────────────────────────────
@@ -563,7 +739,12 @@ function showToast(message, type = 'error', duration = 6000){
 }
 
 // ─── MOOD / REACTION SYSTEM ──────────────────────────────────────────────────
-function setMood(word){ moodWord.textContent = word; }
+function setMood(word){
+  state.mood = word || 'dormant';
+  moodWord.textContent = state.mood;
+  // Trigger a short bone-driven gesture when mood changes
+  try{ animateMoodGesture(state.mood); }catch(e){}
+}
 
 function reactToUserMessage(){
   setMood('listening');
@@ -644,6 +825,9 @@ const latestLine     = document.getElementById('latest-line');
 const fullChatScroll = document.getElementById('full-chat-scroll');
 const msgInput       = document.getElementById('msg-input');
 const sendBtn        = document.getElementById('send-btn');
+const regenerateBtn  = document.getElementById('regenerate-btn');
+const continueBtn    = document.getElementById('continue-btn');
+const stopBtn        = document.getElementById('stop-btn');
 
 function setLatestLine(html, placeholder = false){
   latestLine.innerHTML = html;
@@ -704,12 +888,116 @@ function clearHistory(){
   localStorage.removeItem(HISTORY_KEY);
   fullChatScroll.innerHTML = '';
   setLatestLine('say hi to wake her up...', true);
+  setReplyActions();
+}
+
+function setReplyActions(){
+  const canRegenerate = state.history.some(m => m.role === 'user');
+  const canContinue = state.history.some(m => m.role === 'assistant');
+  if(regenerateBtn){ regenerateBtn.disabled = state.isSending || !canRegenerate; }
+  if(continueBtn){ continueBtn.disabled = state.isSending || !canContinue; }
+  if(stopBtn){ stopBtn.hidden = !state.isSending; }
+}
+
+function updateCreditWarning(){
+  const pill = document.getElementById('status-pill');
+  if(!pill) return;
+  const pct = Number(state.creditUsagePercent || 0);
+  if(pct >= 75){
+    pill.classList.add('credit-warn');
+    const text = document.getElementById('status-text');
+    if(text) text.textContent = `ONLINE — credits ${pct}% used`;
+  } else {
+    pill.classList.remove('credit-warn');
+  }
+}
+
+function abortActiveRequest(){
+  if(currentRequestController){
+    currentRequestController.abort();
+    currentRequestController = null;
+  }
+}
+
+async function regenerateLastReply(){
+  if(state.isSending) return;
+  if(!state.history.some(m => m.role === 'user')){ showToast('There is nothing to regenerate yet.'); return; }
+
+  const historyForTurn = state.history.slice();
+  if(historyForTurn[historyForTurn.length - 1]?.role === 'assistant') historyForTurn.pop();
+  const lastAssistantBubble = [...fullChatScroll.querySelectorAll('.msg.from-luna')].pop();
+  lastAssistantBubble?.remove();
+  state.history = historyForTurn;
+  persistHistory();
+
+  setLatestLine('<div class="typing-dots"><span></span><span></span><span></span></div>');
+  reactWhileThinking();
+  state.isSending = true;
+  sendBtn.disabled = true;
+  setReplyActions();
+  currentRequestController = new AbortController();
+
+  try{
+    const reply = await callOpenRouter(historyForTurn, currentRequestController.signal);
+    state.history.push({ role: 'assistant', content: reply });
+    pushFullChatMsg('assistant', reply);
+    setLatestLine(escapeHtml(reply));
+    persistHistory();
+    reactToReply(reply);
+    speakText(reply);
+  } catch(err){
+    if(err.name === 'AbortError'){ setLatestLine('reply stopped — try again whenever you want.', false); setMood('curious'); }
+    else{ console.error(err); pushSystemMsg('Regeneration failed: ' + (err.message || 'unknown error')); showToast('Regeneration failed — ' + (err.message || 'unknown error')); setMood('dormant'); }
+  } finally{
+    state.isSending = false;
+    sendBtn.disabled = false;
+    currentRequestController = null;
+    setReplyActions();
+  }
+}
+
+async function continueLastReply(){
+  if(state.isSending) return;
+  if(!state.history.some(m => m.role === 'assistant')){ showToast('Luna needs a reply to continue from.'); return; }
+
+  const followUpHistory = [
+    ...state.history,
+    { role: 'user', content: 'Continue the previous reply naturally, keeping the same tone and staying brief.' }
+  ];
+
+  setLatestLine('<div class="typing-dots"><span></span><span></span><span></span></div>');
+  reactWhileThinking();
+  state.isSending = true;
+  sendBtn.disabled = true;
+  setReplyActions();
+  currentRequestController = new AbortController();
+
+  try{
+    const reply = await callOpenRouter(followUpHistory, currentRequestController.signal);
+    state.history.push({ role: 'assistant', content: reply });
+    pushFullChatMsg('assistant', reply);
+    setLatestLine(escapeHtml(reply));
+    persistHistory();
+    reactToReply(reply);
+    speakText(reply);
+  } catch(err){
+    if(err.name === 'AbortError'){ setLatestLine('reply stopped — try again whenever you want.', false); setMood('curious'); }
+    else{ console.error(err); pushSystemMsg('Continue failed: ' + (err.message || 'unknown error')); showToast('Continue failed — ' + (err.message || 'unknown error')); setMood('dormant'); }
+  } finally{
+    state.isSending = false;
+    sendBtn.disabled = false;
+    currentRequestController = null;
+    setReplyActions();
+  }
 }
 
 async function sendMessage(){
   const text = msgInput.value.trim();
   if(!text || state.isSending) return;
   if(!state.openRouterKey){ openKeyCard(); return; }
+
+  // Let AI suggest role changes based on what the user just wrote
+  try{ maybeSuggestRoleFromMessage(text); }catch(e){}
 
   // Unlock/resume the audio graph inside this user gesture so TTS is audible.
   ensureVoiceAudioGraph();
@@ -725,6 +1013,8 @@ async function sendMessage(){
 
   state.isSending  = true;
   sendBtn.disabled = true;
+  setReplyActions();
+  currentRequestController = new AbortController();
   ensureVoiceAudioGraph();
 
   setTimeout(() => {
@@ -733,7 +1023,7 @@ async function sendMessage(){
   }, 150);
 
   try{
-    const reply = await callOpenRouter(state.history);
+    const reply = await callOpenRouter(state.history, currentRequestController.signal);
     state.history.push({ role: 'assistant', content: reply });
     pushFullChatMsg('assistant', reply);
     setLatestLine(escapeHtml(reply));
@@ -741,18 +1031,26 @@ async function sendMessage(){
     reactToReply(reply);
     speakText(reply);
   } catch(err){
-    console.error(err);
-    pushSystemMsg('Connection failed: ' + (err.message || 'unknown error'));
-    showToast('Chat failed — ' + (err.message || 'unknown error'));
-    setMood('dormant');
+    if(err.name === 'AbortError'){
+      setLatestLine('reply stopped — try again whenever you want.', false);
+      setMood('curious');
+      pushSystemMsg('Reply stopped.');
+    } else {
+      console.error(err);
+      pushSystemMsg('Connection failed: ' + (err.message || 'unknown error'));
+      showToast('Chat failed — ' + (err.message || 'unknown error'));
+      setMood('dormant');
+    }
   } finally{
     state.isSending  = false;
     sendBtn.disabled = false;
+    currentRequestController = null;
+    setReplyActions();
   }
 }
 
 // ─── OPENROUTER API ──────────────────────────────────────────────────────────
-async function callOpenRouter(history){
+async function callOpenRouter(history, signal){
   const messages = [
     { role: 'system', content: buildSystemPrompt() },
     ...history.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
@@ -768,7 +1066,8 @@ async function callOpenRouter(history){
       model:      state.modelId,
       messages,
       max_tokens: 600
-    })
+    }),
+    signal
   });
 
   if(!res.ok){
@@ -798,6 +1097,9 @@ msgInput.addEventListener('keydown', e => {
   if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
 });
 sendBtn.addEventListener('click', sendMessage);
+regenerateBtn?.addEventListener('click', regenerateLastReply);
+continueBtn?.addEventListener('click', continueLastReply);
+stopBtn?.addEventListener('click', () => abortActiveRequest());
 
 // ─── SPEECH-TO-TEXT ──────────────────────────────────────────────────────────
 const micBtn    = document.getElementById('mic-btn');
@@ -909,6 +1211,7 @@ const keyCardInput   = document.getElementById('key-card-input');
 
 function openSettings(){
   buildPersonaGrid();
+  buildRoleGrid();
   settingsVeil.classList.add('open');
 }
 function closeSettings(){ settingsVeil.classList.remove('open'); }
@@ -938,6 +1241,7 @@ function updateStatus(){
   const live = !!state.openRouterKey;
   statusPill.classList.toggle('live', live);
   statusText.textContent = live ? 'ONLINE' : 'TAP TO LINK';
+  updateCreditWarning();
 }
 
 function persist(){
@@ -946,6 +1250,7 @@ function persist(){
     elevenLabsKey: state.elevenLabsKey,
     modelId:       state.modelId,
     personaId:     state.personaId,
+    role:          state.role,
     userName:      state.userName,
     userAbout:     state.userAbout,
     userNotes:     state.userNotes,
@@ -986,11 +1291,13 @@ document.getElementById('clear-chat-btn').addEventListener('click', () => {
 document.getElementById('clear-all-btn').addEventListener('click', () => {
   state.openRouterKey = ''; state.elevenLabsKey = ''; state.userName = '';
   state.userAbout = ''; state.userNotes = ''; state.personaId = 'sweet';
+  state.role = 'friend';
   state.modelId   = DEFAULT_MODEL_ID;
   orKeyInput.value = ''; elKeyInput.value = '';
   userNameInput.value = ''; userAboutInput.value = ''; userNotesInput.value = '';
   localStorage.removeItem(STORAGE_KEY);
   clearHistory(); buildPersonaGrid(); applyPersonaTheme(); updateStatus();
+  buildRoleGrid();
   pushSystemMsg("Cleared. Starting fresh with you.");
 });
 
@@ -1036,6 +1343,7 @@ function migrateOldStorage(){
       state.elevenLabsKey = p.elevenLabsKey || DEFAULT_ELEVENLABS_KEY;
       state.modelId       = p.modelId       || DEFAULT_MODEL_ID;
       state.personaId     = p.personaId     || 'sweet';
+      state.role         = p.role           || 'friend';
       state.userName      = p.userName      || '';
       state.userAbout     = p.userAbout     || '';
       state.userNotes     = p.userNotes     || '';
@@ -1047,6 +1355,7 @@ function migrateOldStorage(){
       elKeyInput.value     = state.elevenLabsKey;
       modelUrlInput.value  = state.modelUrl;
       buildPersonaGrid();
+      buildRoleGrid();
     } catch(e){ console.warn('Could not restore saved data', e); }
   } else {
     // No v3 data — check for v2 migration
@@ -1071,6 +1380,8 @@ function migrateOldStorage(){
   }
   applyPersonaTheme();
   updateStatus();
+  updateCreditWarning();
+  setReplyActions();
   if(!state.openRouterKey) setTimeout(openKeyCard, 600);
 })();
 
